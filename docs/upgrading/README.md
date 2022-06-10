@@ -50,19 +50,19 @@ kubectl get mutatingwebhookconfigurations.admissionregistration.k8s.io mutating-
 Copy the `ca_string` from the yaml path `webhooks.name[x].clientConfig.caBundle`, then replace the `{{caBundle}}` from
 the yaml files in `patches`. e.g:
 ```bash
-sed -i'' -e "s/{{caBundle}}/${ca_string}/g" ./"charts/_crds/patches/webhook_in_resourcebindings.yaml"
-sed -i'' -e "s/{{caBundle}}/${ca_string}/g" ./"charts/_crds/patches/webhook_in_clusterresourcebindings.yaml"
+sed -i'' -e "s/{{caBundle}}/${ca_string}/g" ./"charts/karmada/_crds/patches/webhook_in_resourcebindings.yaml"
+sed -i'' -e "s/{{caBundle}}/${ca_string}/g" ./"charts/karmada/_crds/patches/webhook_in_clusterresourcebindings.yaml"
 ```
 
 **Step2: Build final CRD**
 
 Generate the final CRD by `kubectl kustomize` command, e.g:
 ```bash
-kubectl kustomize ./charts/_crds 
+kubectl kustomize ./charts/karmada/_crds 
 ```
 Or, you can apply to `karmada-apiserver` by:
 ```bash
-kubectl kustomize ./charts/_crds | kubectl apply -f -
+kubectl kustomize ./charts/karmada/_crds | kubectl apply -f -
 ```
 
 ### Upgrading Components
