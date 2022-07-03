@@ -8,7 +8,7 @@ Karmada aims to provide turnkey automation for multi-cluster application managem
 
 Switch to the `root` directory of the repo.
 ```console
-helm install karmada -n karmada-system --create-namespace ./charts/karmada
+helm install karmada -n karmada-system --create-namespace --dependency-update ./charts/karmada
 ```
 
 ## Prerequisites
@@ -20,9 +20,36 @@ helm install karmada -n karmada-system --create-namespace ./charts/karmada
 
 To install the chart with the release name `karmada` in namespace `karmada-system`:
 
+- local installation
+
 Switch to the `root` directory of the repo.
 ```console
-helm install karmada -n karmada-system --create-namespace ./charts/karmada
+helm install karmada -n karmada-system --create-namespace --dependency-update ./charts/karmada
+```
+
+- remote installation
+
+First, add the Karmada chart repo to your local repository.
+```console
+$ helm repo add karmada-charts https://raw.githubusercontent.com/karmada-io/karmada/master/charts
+$ helm repo list
+NAME            URL
+karmada-charts   https://raw.githubusercontent.com/karmada-io/karmada/master/charts
+```
+With the repo added, available charts and versions can be viewed.
+```console
+helm search repo karmada
+```
+Install the chart and specify the version to install with the --version argument. Replace <x.x.x> with your desired version. Now only support --version=v1.2.0.
+```console
+helm --namespace karmada-system upgrade -i karmada karmada-charts/karmada --version=<x.x.x> --create-namespace
+Release "karmada" does not exist. Installing it now.
+NAME: karmada
+LAST DEPLOYED: Mon May 30 07:19:36 2022
+NAMESPACE: karmada-system
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
 ```
 
 Get kubeconfig from the cluster:
@@ -33,7 +60,7 @@ kubectl get secret -n karmada-system karmada-kubeconfig -o jsonpath={.data.kubec
 
 > **Tip**: List all releases using `helm list`
 
-For better scheduling effect, you can choose to install the `karmada-descheduler` component in the karmada controller plane. Link: [here](../docs/descheduler.md). The following is the specific installation guide.
+For better scheduling effect, you can choose to install the `karmada-descheduler` component in the karmada controller plane. Link: [here](../../docs/descheduler.md). The following is the specific installation guide.
 
 Edited values.yaml for karmada-descheduler
 ```YAML

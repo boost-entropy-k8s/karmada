@@ -98,6 +98,7 @@ Supported resources:
 - DaemonSet(apps/v1)
 - StatefulSet(apps/v1)
 - Pod(v1)
+- PersistentVolumeClaim(v1)
 
 ### InterpretStatus
 
@@ -114,6 +115,7 @@ Supported resources:
 Supported resources:
 - Deployment(apps/v1)
 - Job(batch/v1)
+- CronJob(batch/v1)
 - Pod(v1)
 - DaemonSet(apps/v1)
 - StatefulSet(apps/v1)
