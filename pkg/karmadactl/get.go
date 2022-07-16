@@ -66,11 +66,10 @@ func NewCmdGet(karmadaConfig KarmadaConfig, parentCommand string) *cobra.Command
 	ioStreams := genericclioptions.IOStreams{In: getIn, Out: getOut, ErrOut: getErr}
 	o := NewCommandGetOptions("karmadactl", ioStreams)
 	cmd := &cobra.Command{
-		Use:                   "get [NAME | -l label | -n namespace]  [flags]",
-		DisableFlagsInUseLine: true,
-		Short:                 getShort,
-		SilenceUsage:          true,
-		Example:               getExample(parentCommand),
+		Use:          "get [NAME | -l label | -n namespace]  [flags]",
+		Short:        getShort,
+		SilenceUsage: true,
+		Example:      getExample(parentCommand),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := o.Complete(karmadaConfig); err != nil {
 				return err
@@ -91,7 +90,6 @@ func NewCmdGet(karmadaConfig KarmadaConfig, parentCommand string) *cobra.Command
 	cmd.Flags().StringVarP(&o.Namespace, "namespace", "n", o.Namespace, "-n=namespace or -n namespace")
 	cmd.Flags().StringVarP(&o.LabelSelector, "labels", "l", "", "-l=label or -l label")
 	cmd.Flags().StringSliceVarP(&o.Clusters, "clusters", "C", []string{}, "-C=member1,member2")
-	cmd.Flags().StringVar(&o.ClusterNamespace, "cluster-namespace", options.DefaultKarmadaClusterNamespace, "Namespace in the control plane where member cluster secrets are stored.")
 	cmd.Flags().BoolVarP(&o.AllNamespaces, "all-namespaces", "A", o.AllNamespaces, "If present, list the requested object(s) across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
 	cmd.Flags().BoolVar(&o.IgnoreNotFound, "ignore-not-found", o.IgnoreNotFound, "If the requested object does not exist the command will return exit code 0.")
 	cmd.Flags().BoolVarP(&o.Watch, "watch", "w", o.Watch, "After listing/getting the requested object, watch for changes. Uninitialized objects are excluded if no object name is provided.")
@@ -105,9 +103,6 @@ func NewCmdGet(karmadaConfig KarmadaConfig, parentCommand string) *cobra.Command
 type CommandGetOptions struct {
 	// global flags
 	options.GlobalCommandOptions
-
-	// ClusterNamespace holds the namespace name where the member cluster secrets are stored.
-	ClusterNamespace string
 
 	Clusters []string
 
