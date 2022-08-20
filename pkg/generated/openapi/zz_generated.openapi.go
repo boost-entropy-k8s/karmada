@@ -516,6 +516,7 @@ func schema_pkg_apis_cluster_v1alpha1_AllocatableModeling(ref common.ReferenceCa
 					"grade": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Grade is the index of ResourceModel.",
+							Default:     0,
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -523,11 +524,13 @@ func schema_pkg_apis_cluster_v1alpha1_AllocatableModeling(ref common.ReferenceCa
 					"count": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Count is the number of nodes that own the resources delineated by this modeling.",
+							Default:     0,
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
 					},
 				},
+				Required: []string{"grade", "count"},
 			},
 		},
 	}
@@ -925,6 +928,7 @@ func schema_pkg_apis_cluster_v1alpha1_ResourceModel(ref common.ReferenceCallback
 					"grade": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Grade is the index for the resource modeling.",
+							Default:     0,
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -944,6 +948,7 @@ func schema_pkg_apis_cluster_v1alpha1_ResourceModel(ref common.ReferenceCallback
 						},
 					},
 				},
+				Required: []string{"grade", "ranges"},
 			},
 		},
 		Dependencies: []string{
@@ -961,6 +966,7 @@ func schema_pkg_apis_cluster_v1alpha1_ResourceModelRange(ref common.ReferenceCal
 					"name": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Name is the name for the resource that you want to categorize.",
+							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -980,6 +986,7 @@ func schema_pkg_apis_cluster_v1alpha1_ResourceModelRange(ref common.ReferenceCal
 						},
 					},
 				},
+				Required: []string{"name", "min", "max"},
 			},
 		},
 		Dependencies: []string{
@@ -3631,6 +3638,13 @@ func schema_pkg_apis_work_v1alpha1_ManifestStatus(ref common.ReferenceCallback) 
 							Ref:         ref("k8s.io/apimachinery/pkg/runtime.RawExtension"),
 						},
 					},
+					"health": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Health represents the healthy state of the current resource. There maybe different rules for different resources to achieve health status.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"identifier"},
 			},
@@ -4218,6 +4232,13 @@ func schema_pkg_apis_work_v1alpha2_AggregatedStatusItem(ref common.ReferenceCall
 					"appliedMessage": {
 						SchemaProps: spec.SchemaProps{
 							Description: "AppliedMessage is a human readable message indicating details about the applied status. This is usually holds the error message in case of apply failed.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"health": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Health represents the healthy state of the current resource. There maybe different rules for different resources to achieve health status.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
