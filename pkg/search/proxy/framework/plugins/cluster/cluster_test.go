@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -33,6 +32,7 @@ import (
 	"github.com/karmada-io/karmada/pkg/search/proxy/framework"
 	"github.com/karmada-io/karmada/pkg/search/proxy/store"
 	proxytest "github.com/karmada-io/karmada/pkg/search/proxy/testing"
+	utiltest "github.com/karmada-io/karmada/pkg/util/testing"
 )
 
 func TestModifyRequest(t *testing.T) {
@@ -136,7 +136,7 @@ func TestModifyRequest(t *testing.T) {
 
 			var get runtime.Object
 			if req.ContentLength != 0 {
-				data, err := ioutil.ReadAll(req.Body)
+				data, err := io.ReadAll(req.Body)
 				if err != nil {
 					t.Error(err)
 					return
@@ -367,7 +367,7 @@ func Test_clusterProxy_connect(t *testing.T) {
 				request: (&http.Request{
 					Method:        "PUT",
 					URL:           &url.URL{Scheme: "https", Host: "localhost", Path: "/test"},
-					Body:          ioutil.NopCloser(&alwaysErrorReader{}),
+					Body:          io.NopCloser(&alwaysErrorReader{}),
 					ContentLength: 10,
 					Header:        make(http.Header),
 				}).WithContext(reqCtx),
@@ -402,7 +402,7 @@ func Test_clusterProxy_connect(t *testing.T) {
 				RequestInfo:          tt.args.requestInfo,
 				GroupVersionResource: proxytest.PodGVR,
 				ProxyPath:            "/proxy",
-				Responder:            proxytest.NewResponder(response),
+				Responder:            utiltest.NewResponder(response),
 				HTTPReq:              tt.args.request,
 			})
 			if !proxytest.ErrorMessageEquals(err, tt.want.err) {
