@@ -233,6 +233,23 @@ func (i *CommandInitOption) makeKarmadaKubeControllerManagerDeployment() *appsv1
 		},
 	}
 
+	// Probes
+	livenessProbe := &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path: "/healthz",
+				Port: intstr.IntOrString{
+					IntVal: 10257,
+				},
+				Scheme: corev1.URISchemeHTTPS,
+			},
+		},
+		InitialDelaySeconds: 10,
+		FailureThreshold:    8,
+		PeriodSeconds:       10,
+		TimeoutSeconds:      15,
+	}
+
 	podSpec := corev1.PodSpec{
 		Affinity: &corev1.Affinity{
 			PodAntiAffinity: &corev1.PodAntiAffinity{
@@ -279,6 +296,7 @@ func (i *CommandInitOption) makeKarmadaKubeControllerManagerDeployment() *appsv1
 					"--use-service-account-credentials=true",
 					"--v=4",
 				},
+				LivenessProbe: livenessProbe,
 				Ports: []corev1.ContainerPort{
 					{
 						Name:          portName,
@@ -399,7 +417,7 @@ func (i *CommandInitOption) makeKarmadaSchedulerDeployment() *appsv1.Deployment 
 		Containers: []corev1.Container{
 			{
 				Name:  schedulerDeploymentNameAndServiceAccountName,
-				Image: i.KarmadaSchedulerImage,
+				Image: i.karmadaSchedulerImage(),
 				Command: []string{
 					"/bin/karmada-scheduler",
 					"--kubeconfig=/etc/kubeconfig",
@@ -514,7 +532,7 @@ func (i *CommandInitOption) makeKarmadaControllerManagerDeployment() *appsv1.Dep
 		Containers: []corev1.Container{
 			{
 				Name:  controllerManagerDeploymentAndServiceName,
-				Image: i.KarmadaControllerManagerImage,
+				Image: i.karmadaControllerManagerImage(),
 				Command: []string{
 					"/bin/karmada-controller-manager",
 					"--kubeconfig=/etc/kubeconfig",
@@ -631,7 +649,7 @@ func (i *CommandInitOption) makeKarmadaWebhookDeployment() *appsv1.Deployment {
 		Containers: []corev1.Container{
 			{
 				Name:  webhookDeploymentAndServiceAccountAndServiceName,
-				Image: i.KarmadaWebhookImage,
+				Image: i.karmadaWebhookImage(),
 				Command: []string{
 					"/bin/karmada-webhook",
 					"--kubeconfig=/etc/kubeconfig",
@@ -776,7 +794,7 @@ func (i *CommandInitOption) makeKarmadaAggregatedAPIServerDeployment() *appsv1.D
 		Containers: []corev1.Container{
 			{
 				Name:  karmadaAggregatedAPIServerDeploymentAndServiceName,
-				Image: i.KarmadaAggregatedAPIServerImage,
+				Image: i.karmadaAggregatedAPIServerImage(),
 				Command: []string{
 					"/bin/karmada-aggregated-apiserver",
 					"--kubeconfig=/etc/kubeconfig",
