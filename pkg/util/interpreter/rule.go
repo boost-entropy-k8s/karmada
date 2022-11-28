@@ -1,7 +1,8 @@
-package interpret
+package interpreter
 
 import (
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
@@ -10,7 +11,8 @@ import (
 	"github.com/karmada-io/karmada/pkg/resourceinterpreter/configurableinterpreter"
 )
 
-var allRules = []Rule{
+// AllResourceInterpreterCustomizationRules all InterpreterOperations
+var AllResourceInterpreterCustomizationRules = []Rule{
 	&retentionRule{},
 	&replicaResourceRule{},
 	&replicaRevisionRule{},
@@ -45,7 +47,7 @@ func (r *retentionRule) SetScript(c *configv1alpha1.ResourceInterpreterCustomiza
 	c.Spec.Customizations.Retention.LuaScript = script
 }
 
-func (r *retentionRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args ruleArgs) *ruleResult {
+func (r *retentionRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args RuleArgs) *RuleResult {
 	desired, err := args.getDesiredObjectOrError()
 	if err != nil {
 		return newRuleResultWithError(err)
@@ -90,7 +92,7 @@ func (r *replicaResourceRule) SetScript(c *configv1alpha1.ResourceInterpreterCus
 	c.Spec.Customizations.ReplicaResource.LuaScript = script
 }
 
-func (r *replicaResourceRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args ruleArgs) *ruleResult {
+func (r *replicaResourceRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args RuleArgs) *RuleResult {
 	obj, err := args.getObjectOrError()
 	if err != nil {
 		return newRuleResultWithError(err)
@@ -131,7 +133,7 @@ func (r *replicaRevisionRule) SetScript(c *configv1alpha1.ResourceInterpreterCus
 	c.Spec.Customizations.ReplicaRevision.LuaScript = script
 }
 
-func (r *replicaRevisionRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args ruleArgs) *ruleResult {
+func (r *replicaRevisionRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args RuleArgs) *RuleResult {
 	obj, err := args.getObjectOrError()
 	if err != nil {
 		return newRuleResultWithError(err)
@@ -172,7 +174,7 @@ func (s *statusReflectionRule) SetScript(c *configv1alpha1.ResourceInterpreterCu
 	c.Spec.Customizations.StatusReflection.LuaScript = script
 }
 
-func (s *statusReflectionRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args ruleArgs) *ruleResult {
+func (s *statusReflectionRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args RuleArgs) *RuleResult {
 	obj, err := args.getObjectOrError()
 	if err != nil {
 		return newRuleResultWithError(err)
@@ -213,19 +215,24 @@ func (s *statusAggregationRule) SetScript(c *configv1alpha1.ResourceInterpreterC
 	c.Spec.Customizations.StatusAggregation.LuaScript = script
 }
 
-func (s *statusAggregationRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args ruleArgs) *ruleResult {
+func (s *statusAggregationRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args RuleArgs) *RuleResult {
 	obj, err := args.getObjectOrError()
 	if err != nil {
 		return newRuleResultWithError(err)
 	}
-	aggregateStatus, enabled, err := interpreter.AggregateStatus(obj, args.Status)
+
+	status := args.Status
+	if status == nil {
+		status = []workv1alpha2.AggregatedStatusItem{}
+	}
+	aggregateStatus, enabled, err := interpreter.AggregateStatus(obj, status)
 	if err != nil {
 		return newRuleResultWithError(err)
 	}
 	if !enabled {
 		return newRuleResultWithError(fmt.Errorf("rule is not enabled"))
 	}
-	return newRuleResult().add("aggregateStatus", aggregateStatus)
+	return newRuleResult().add("aggregatedStatus", aggregateStatus)
 }
 
 type healthInterpretationRule struct {
@@ -254,7 +261,7 @@ func (h *healthInterpretationRule) SetScript(c *configv1alpha1.ResourceInterpret
 	c.Spec.Customizations.HealthInterpretation.LuaScript = script
 }
 
-func (h *healthInterpretationRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args ruleArgs) *ruleResult {
+func (h *healthInterpretationRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args RuleArgs) *RuleResult {
 	obj, err := args.getObjectOrError()
 	if err != nil {
 		return newRuleResultWithError(err)
@@ -295,7 +302,7 @@ func (d *dependencyInterpretationRule) SetScript(c *configv1alpha1.ResourceInter
 	c.Spec.Customizations.DependencyInterpretation.LuaScript = script
 }
 
-func (d *dependencyInterpretationRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args ruleArgs) *ruleResult {
+func (d *dependencyInterpretationRule) Run(interpreter *configurableinterpreter.ConfigurableInterpreter, args RuleArgs) *RuleResult {
 	obj, err := args.getObjectOrError()
 	if err != nil {
 		return newRuleResultWithError(err)
@@ -319,7 +326,7 @@ type Rule interface {
 	// SetScript set the script for the rule. If script is empty, disable the rule.
 	SetScript(*configv1alpha1.ResourceInterpreterCustomization, string)
 	// Run execute the rule with given args, and return the result.
-	Run(*configurableinterpreter.ConfigurableInterpreter, ruleArgs) *ruleResult
+	Run(*configurableinterpreter.ConfigurableInterpreter, RuleArgs) *RuleResult
 }
 
 // Rules is a series of rules.
@@ -334,6 +341,21 @@ func (r Rules) Names() []string {
 	return names
 }
 
+// GetByOperation returns the matched rule by operation name, ignoring case. Return nil if none is matched.
+func (r Rules) GetByOperation(operation string) Rule {
+	if operation == "" {
+		return nil
+	}
+	operation = strings.ToLower(operation)
+	for _, rule := range r {
+		ruleName := strings.ToLower(rule.Name())
+		if ruleName == operation {
+			return rule
+		}
+	}
+	return nil
+}
+
 // Get returns the rule with the name. If not found, return nil.
 func (r Rules) Get(name string) Rule {
 	for _, rr := range r {
@@ -344,33 +366,34 @@ func (r Rules) Get(name string) Rule {
 	return nil
 }
 
-type ruleArgs struct {
+// RuleArgs rule execution args.
+type RuleArgs struct {
 	Desired  *unstructured.Unstructured
 	Observed *unstructured.Unstructured
 	Status   []workv1alpha2.AggregatedStatusItem
 	Replica  int64
 }
 
-func (r ruleArgs) getDesiredObjectOrError() (*unstructured.Unstructured, error) {
+func (r RuleArgs) getDesiredObjectOrError() (*unstructured.Unstructured, error) {
 	if r.Desired == nil {
 		return nil, fmt.Errorf("desired, desired-file options are not set")
 	}
 	return r.Desired, nil
 }
 
-func (r ruleArgs) getObservedObjectOrError() (*unstructured.Unstructured, error) {
+func (r RuleArgs) getObservedObjectOrError() (*unstructured.Unstructured, error) {
 	if r.Observed == nil {
 		return nil, fmt.Errorf("observed, observed-file options are not set")
 	}
 	return r.Observed, nil
 }
 
-func (r ruleArgs) getObjectOrError() (*unstructured.Unstructured, error) {
+func (r RuleArgs) getObjectOrError() (*unstructured.Unstructured, error) {
 	if r.Desired == nil && r.Observed == nil {
-		return nil, fmt.Errorf("desired, desired-file, observed, observed-file options are not set")
+		return nil, fmt.Errorf("desired-file, observed-file options are not set")
 	}
 	if r.Desired != nil && r.Observed != nil {
-		return nil, fmt.Errorf("you can not specify multiple object by desired, desired-file, observed, observed-file options")
+		return nil, fmt.Errorf("you can not specify both desired-file and observed-file options")
 	}
 	if r.Desired != nil {
 		return r.Desired, nil
@@ -378,27 +401,29 @@ func (r ruleArgs) getObjectOrError() (*unstructured.Unstructured, error) {
 	return r.Observed, nil
 }
 
-type nameValue struct {
+// NameValue name and value.
+type NameValue struct {
 	Name  string
 	Value interface{}
 }
 
-type ruleResult struct {
-	Results []nameValue
+// RuleResult rule execution result.
+type RuleResult struct {
+	Results []NameValue
 	Err     error
 }
 
-func newRuleResult() *ruleResult {
-	return &ruleResult{}
+func newRuleResult() *RuleResult {
+	return &RuleResult{}
 }
 
-func newRuleResultWithError(err error) *ruleResult {
-	return &ruleResult{
+func newRuleResultWithError(err error) *RuleResult {
+	return &RuleResult{
 		Err: err,
 	}
 }
 
-func (r *ruleResult) add(name string, value interface{}) *ruleResult {
-	r.Results = append(r.Results, nameValue{Name: name, Value: value})
+func (r *RuleResult) add(name string, value interface{}) *RuleResult {
+	r.Results = append(r.Results, NameValue{Name: name, Value: value})
 	return r
 }
