@@ -170,10 +170,7 @@ func run(ctx context.Context, opts *options.Options) error {
 		return fmt.Errorf("failed to register with karmada control plane: %w", err)
 	}
 
-	executionSpace, err := names.GenerateExecutionSpaceName(opts.ClusterName)
-	if err != nil {
-		return fmt.Errorf("failed to generate execution space name for member cluster %s, err is %v", opts.ClusterName, err)
-	}
+	executionSpace := names.GenerateExecutionSpaceName(opts.ClusterName)
 
 	controllerManager, err := controllerruntime.NewManager(controlPlaneRestConfig, controllerruntime.Options{
 		Scheme:                     gclient.NewSchema(),
@@ -208,7 +205,7 @@ func run(ctx context.Context, opts *options.Options) error {
 	}
 
 	if err := controllerManager.AddHealthzCheck("ping", healthz.Ping); err != nil {
-		klog.Errorf("failed to add health check endpoint: %v", err)
+		klog.Errorf("Failed to add health check endpoint: %v", err)
 		return err
 	}
 

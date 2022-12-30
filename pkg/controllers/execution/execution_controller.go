@@ -133,7 +133,7 @@ func (c *Controller) tryDeleteWorkload(clusterName string, work *workv1alpha1.Wo
 		workload := &unstructured.Unstructured{}
 		err := workload.UnmarshalJSON(manifest.Raw)
 		if err != nil {
-			klog.Errorf("failed to unmarshal workload, error is: %v", err)
+			klog.Errorf("Failed to unmarshal workload, error is: %v", err)
 			return err
 		}
 
@@ -190,7 +190,7 @@ func (c *Controller) syncToClusters(clusterName string, work *workv1alpha1.Work)
 		workload := &unstructured.Unstructured{}
 		err := workload.UnmarshalJSON(manifest.Raw)
 		if err != nil {
-			klog.Errorf("failed to unmarshal workload, error is: %v", err)
+			klog.Errorf("Failed to unmarshal workload, error is: %v", err)
 			errs = append(errs, err)
 			continue
 		}
@@ -219,7 +219,7 @@ func (c *Controller) syncToClusters(clusterName string, work *workv1alpha1.Work)
 
 	if len(errs) > 0 {
 		total := len(work.Spec.Workload.Manifests)
-		message := fmt.Sprintf("Failed to apply all manifests (%v/%v): %v", syncSucceedNum, total, errors.NewAggregate(errs).Error())
+		message := fmt.Sprintf("Failed to apply all manifests (%d/%d): %s", syncSucceedNum, total, errors.NewAggregate(errs).Error())
 		err := c.updateAppliedCondition(work, metav1.ConditionFalse, "AppliedFailed", message)
 		if err != nil {
 			klog.Errorf("Failed to update applied status for given work %v, namespace is %v, err is %v", work.Name, work.Namespace, err)
@@ -291,7 +291,7 @@ func (c *Controller) updateAppliedCondition(work *workv1alpha1.Work, status meta
 			// make a copy, so we don't mutate the shared cache
 			work = updated.DeepCopy()
 		} else {
-			klog.Errorf("failed to get updated work %s/%s: %v", work.Namespace, work.Name, err)
+			klog.Errorf("Failed to get updated work %s/%s: %v", work.Namespace, work.Name, err)
 		}
 		return updateErr
 	})

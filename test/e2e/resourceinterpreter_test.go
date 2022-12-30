@@ -3,7 +3,6 @@ package e2e
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"time"
 
@@ -73,8 +72,8 @@ var _ = ginkgo.Describe("Resource interpreter webhook testing", func() {
 					resourceBinding, err := karmadaClient.WorkV1alpha2().ResourceBindings(workload.Namespace).Get(context.TODO(), resourceBindingName, metav1.GetOptions{})
 					g.Expect(err).NotTo(gomega.HaveOccurred())
 
-					klog.Infof(fmt.Sprintf("ResourceBinding(%s/%s)'s replicas is %d, expected: %d.",
-						resourceBinding.Namespace, resourceBinding.Name, resourceBinding.Spec.Replicas, expectedReplicas))
+					klog.Infof("ResourceBinding(%s/%s)'s replicas is %d, expected: %d.",
+						resourceBinding.Namespace, resourceBinding.Name, resourceBinding.Spec.Replicas, expectedReplicas)
 					return resourceBinding.Spec.Replicas, nil
 				}, pollTimeout, pollInterval).Should(gomega.Equal(expectedReplicas))
 			})
@@ -202,8 +201,7 @@ var _ = ginkgo.Describe("Resource interpreter webhook testing", func() {
 				framework.UpdateWorkload(clusterDynamicClient, memberWorkload, cluster, "status")
 
 				workName := names.GenerateWorkName(workload.Kind, workload.Name, workload.Namespace)
-				workNamespace, err := names.GenerateExecutionSpaceName(cluster)
-				gomega.Expect(err).Should(gomega.BeNil())
+				workNamespace := names.GenerateExecutionSpaceName(cluster)
 
 				gomega.Eventually(func(g gomega.Gomega) (bool, error) {
 					work, err := karmadaClient.WorkV1alpha1().Works(workNamespace).Get(context.TODO(), workName, metav1.GetOptions{})
@@ -351,14 +349,14 @@ var _ = framework.SerialDescribe("Resource interpreter customization testing", f
 						resourceBinding, err := karmadaClient.WorkV1alpha2().ResourceBindings(deployment.Namespace).Get(context.TODO(), resourceBindingName, metav1.GetOptions{})
 						g.Expect(err).NotTo(gomega.HaveOccurred())
 
-						klog.Infof(fmt.Sprintf("ResourceBinding(%s/%s)'s replicas is %d, expected: %d.",
-							resourceBinding.Namespace, resourceBinding.Name, resourceBinding.Spec.Replicas, expectedReplicas))
+						klog.Infof("ResourceBinding(%s/%s)'s replicas is %d, expected: %d.",
+							resourceBinding.Namespace, resourceBinding.Name, resourceBinding.Spec.Replicas, expectedReplicas)
 						if resourceBinding.Spec.Replicas != expectedReplicas {
 							return false, nil
 						}
 
-						klog.Infof(fmt.Sprintf("ResourceBinding(%s/%s)'s replicaRequirements is %+v, expected: %+v.",
-							resourceBinding.Namespace, resourceBinding.Name, resourceBinding.Spec.ReplicaRequirements, expectedReplicaRequirements))
+						klog.Infof("ResourceBinding(%s/%s)'s replicaRequirements is %+v, expected: %+v.",
+							resourceBinding.Namespace, resourceBinding.Name, resourceBinding.Spec.ReplicaRequirements, expectedReplicaRequirements)
 						return reflect.DeepEqual(resourceBinding.Spec.ReplicaRequirements, expectedReplicaRequirements), nil
 					}, pollTimeout, pollInterval).Should(gomega.Equal(true))
 				})

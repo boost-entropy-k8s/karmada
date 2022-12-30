@@ -123,13 +123,13 @@ func (c *Controller) syncImpersonationConfig(cluster *clusterv1alpha1.Cluster) e
 
 	// step5: sync clusterrole to cluster for impersonation
 	if err := c.buildImpersonationClusterRole(cluster, rules); err != nil {
-		klog.Errorf("failed to sync impersonate clusterrole to cluster(%s): %v", cluster.Name, err)
+		klog.Errorf("Failed to sync impersonate clusterrole to cluster(%s): %v", cluster.Name, err)
 		return err
 	}
 
 	// step6: sync clusterrolebinding to cluster for impersonation
 	if err := c.buildImpersonationClusterRoleBinding(cluster); err != nil {
-		klog.Errorf("failed to sync impersonate clusterrolebinding to cluster(%s): %v", cluster.Name, err)
+		klog.Errorf("Failed to sync impersonate clusterrolebinding to cluster(%s): %v", cluster.Name, err)
 		return err
 	}
 
@@ -190,11 +190,7 @@ func (c *Controller) buildImpersonationClusterRoleBinding(cluster *clusterv1alph
 }
 
 func (c *Controller) buildWorks(cluster *clusterv1alpha1.Cluster, obj *unstructured.Unstructured) error {
-	workNamespace, err := names.GenerateExecutionSpaceName(cluster.Name)
-	if err != nil {
-		klog.Errorf("Failed to generate execution space name for member cluster %s, err is %v", cluster.Name, err)
-		return err
-	}
+	workNamespace := names.GenerateExecutionSpaceName(cluster.Name)
 
 	clusterRoleBindingWorkName := names.GenerateWorkName(obj.GetKind(), obj.GetName(), obj.GetNamespace())
 	objectMeta := metav1.ObjectMeta{
@@ -209,7 +205,7 @@ func (c *Controller) buildWorks(cluster *clusterv1alpha1.Cluster, obj *unstructu
 	util.MergeLabel(obj, workv1alpha1.WorkNamespaceLabel, workNamespace)
 	util.MergeLabel(obj, workv1alpha1.WorkNameLabel, clusterRoleBindingWorkName)
 
-	if err = helper.CreateOrUpdateWork(c.Client, objectMeta, obj); err != nil {
+	if err := helper.CreateOrUpdateWork(c.Client, objectMeta, obj); err != nil {
 		return err
 	}
 
