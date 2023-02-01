@@ -23,41 +23,63 @@ import (
 // to add event handlers for various informers.
 func (s *Scheduler) addAllEventHandlers() {
 	bindingInformer := s.informerFactory.Work().V1alpha2().ResourceBindings().Informer()
-	bindingInformer.AddEventHandler(cache.FilteringResourceEventHandler{
+	_, err := bindingInformer.AddEventHandler(cache.FilteringResourceEventHandler{
 		FilterFunc: s.resourceBindingEventFilter,
 		Handler: cache.ResourceEventHandlerFuncs{
 			AddFunc:    s.onResourceBindingAdd,
 			UpdateFunc: s.onResourceBindingUpdate,
 		},
 	})
+	if err != nil {
+		klog.Errorf("Failed to add handlers for ResourceBindings: %v", err)
+	}
 
 	policyInformer := s.informerFactory.Policy().V1alpha1().PropagationPolicies().Informer()
-	policyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		UpdateFunc: s.onPropagationPolicyUpdate,
+	_, err = policyInformer.AddEventHandler(cache.FilteringResourceEventHandler{
+		FilterFunc: s.policyEventFilter,
+		Handler: cache.ResourceEventHandlerFuncs{
+			UpdateFunc: s.onPropagationPolicyUpdate,
+		},
 	})
+	if err != nil {
+		klog.Errorf("Failed to add handlers for PropagationPolicies: %v", err)
+	}
 
 	clusterBindingInformer := s.informerFactory.Work().V1alpha2().ClusterResourceBindings().Informer()
-	clusterBindingInformer.AddEventHandler(cache.FilteringResourceEventHandler{
+	_, err = clusterBindingInformer.AddEventHandler(cache.FilteringResourceEventHandler{
 		FilterFunc: s.resourceBindingEventFilter,
 		Handler: cache.ResourceEventHandlerFuncs{
 			AddFunc:    s.onResourceBindingAdd,
 			UpdateFunc: s.onResourceBindingUpdate,
 		},
 	})
+	if err != nil {
+		klog.Errorf("Failed to add handlers for ClusterResourceBindings: %v", err)
+	}
 
 	clusterPolicyInformer := s.informerFactory.Policy().V1alpha1().ClusterPropagationPolicies().Informer()
-	clusterPolicyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		UpdateFunc: s.onClusterPropagationPolicyUpdate,
+	_, err = clusterPolicyInformer.AddEventHandler(cache.FilteringResourceEventHandler{
+		FilterFunc: s.policyEventFilter,
+		Handler: cache.ResourceEventHandlerFuncs{
+			UpdateFunc: s.onClusterPropagationPolicyUpdate,
+		},
 	})
+	if err != nil {
+		klog.Errorf("Failed to add handlers for ClusterPropagationPolicies: %v", err)
+	}
 
 	memClusterInformer := s.informerFactory.Cluster().V1alpha1().Clusters().Informer()
-	memClusterInformer.AddEventHandler(
+	_, err = memClusterInformer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    s.addCluster,
 			UpdateFunc: s.updateCluster,
 			DeleteFunc: s.deleteCluster,
 		},
 	)
+	if err != nil {
+		klog.Errorf("Failed to add handlers for Clusters: %v", err)
+	}
+
 	// ignore the error here because the informers haven't been started
 	_ = bindingInformer.SetTransform(fedinformer.StripUnusedFields)
 	_ = policyInformer.SetTransform(fedinformer.StripUnusedFields)
@@ -77,8 +99,30 @@ func (s *Scheduler) resourceBindingEventFilter(obj interface{}) bool {
 		return false
 	}
 
+	switch t := obj.(type) {
+	case *workv1alpha2.ResourceBinding:
+		if !schedulerNameFilter(s.schedulerName, t.Spec.SchedulerName) {
+			return false
+		}
+	case *workv1alpha2.ClusterResourceBinding:
+		if !schedulerNameFilter(s.schedulerName, t.Spec.SchedulerName) {
+			return false
+		}
+	}
+
 	return util.GetLabelValue(accessor.GetLabels(), policyv1alpha1.PropagationPolicyNameLabel) != "" ||
 		util.GetLabelValue(accessor.GetLabels(), policyv1alpha1.ClusterPropagationPolicyLabel) != ""
+}
+
+func (s *Scheduler) policyEventFilter(obj interface{}) bool {
+	switch t := obj.(type) {
+	case *policyv1alpha1.PropagationPolicy:
+		return schedulerNameFilter(s.schedulerName, t.Spec.SchedulerName)
+	case *policyv1alpha1.ClusterPropagationPolicy:
+		return schedulerNameFilter(s.schedulerName, t.Spec.SchedulerName)
+	}
+
+	return true
 }
 
 func (s *Scheduler) onResourceBindingAdd(obj interface{}) {
@@ -311,4 +355,12 @@ func (s *Scheduler) deleteCluster(obj interface{}) {
 	if s.enableSchedulerEstimator {
 		s.schedulerEstimatorWorker.Add(cluster.Name)
 	}
+}
+
+func schedulerNameFilter(schedulerNameFromOptions, schedulerName string) bool {
+	if schedulerName == "" {
+		schedulerName = DefaultScheduler
+	}
+
+	return schedulerNameFromOptions == schedulerName
 }
