@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"time"
 
-	jsonpatch "github.com/evanphx/json-patch/v5"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -316,7 +315,7 @@ func (s *Scheduler) doScheduleBinding(namespace, name string) (err error) {
 		metrics.BindingSchedule(string(ReconcileSchedule), utilmetrics.DurationInSeconds(start), err)
 		return err
 	}
-	if rb.Spec.Placement.ReplicaScheduling != nil && util.IsBindingReplicasChanged(&rb.Spec, rb.Spec.Placement.ReplicaScheduling) {
+	if util.IsBindingReplicasChanged(&rb.Spec, rb.Spec.Placement.ReplicaScheduling) {
 		// binding replicas changed, need reschedule
 		klog.Infof("Reschedule ResourceBinding(%s/%s) as replicas scaled down or scaled up", namespace, name)
 		err = s.scheduleResourceBinding(rb)
@@ -324,8 +323,7 @@ func (s *Scheduler) doScheduleBinding(namespace, name string) (err error) {
 		return err
 	}
 	if rb.Spec.Replicas == 0 ||
-		rb.Spec.Placement.ReplicaScheduling == nil ||
-		rb.Spec.Placement.ReplicaScheduling.ReplicaSchedulingType == policyv1alpha1.ReplicaSchedulingTypeDuplicated {
+		rb.Spec.Placement.ReplicaSchedulingType() == policyv1alpha1.ReplicaSchedulingTypeDuplicated {
 		// Duplicated resources should always be scheduled. Note: non-workload is considered as duplicated
 		// even if scheduling type is divided.
 		klog.V(3).Infof("Start to schedule ResourceBinding(%s/%s) as scheduling type is duplicated", namespace, name)
@@ -364,7 +362,7 @@ func (s *Scheduler) doScheduleClusterBinding(name string) (err error) {
 		metrics.BindingSchedule(string(ReconcileSchedule), utilmetrics.DurationInSeconds(start), err)
 		return err
 	}
-	if crb.Spec.Placement.ReplicaScheduling != nil && util.IsBindingReplicasChanged(&crb.Spec, crb.Spec.Placement.ReplicaScheduling) {
+	if util.IsBindingReplicasChanged(&crb.Spec, crb.Spec.Placement.ReplicaScheduling) {
 		// binding replicas changed, need reschedule
 		klog.Infof("Reschedule ClusterResourceBinding(%s) as replicas scaled down or scaled up", name)
 		err = s.scheduleClusterResourceBinding(crb)
@@ -372,8 +370,7 @@ func (s *Scheduler) doScheduleClusterBinding(name string) (err error) {
 		return err
 	}
 	if crb.Spec.Replicas == 0 ||
-		crb.Spec.Placement.ReplicaScheduling == nil ||
-		crb.Spec.Placement.ReplicaScheduling.ReplicaSchedulingType == policyv1alpha1.ReplicaSchedulingTypeDuplicated {
+		crb.Spec.Placement.ReplicaSchedulingType() == policyv1alpha1.ReplicaSchedulingTypeDuplicated {
 		// Duplicated resources should always be scheduled. Note: non-workload is considered as duplicated
 		// even if scheduling type is divided.
 		klog.V(3).Infof("Start to schedule ClusterResourceBinding(%s) as scheduling type is duplicated", name)
@@ -505,19 +502,11 @@ func (s *Scheduler) patchScheduleResultForResourceBinding(oldBinding *workv1alph
 	newBinding.Annotations[util.PolicyPlacementAnnotation] = placement
 	newBinding.Spec.Clusters = scheduleResult
 
-	oldData, err := json.Marshal(oldBinding)
+	patchBytes, err := helper.GenMergePatch(oldBinding, newBinding)
 	if err != nil {
-		return fmt.Errorf("failed to marshal the existing resource binding(%s/%s): %v", oldBinding.Namespace, oldBinding.Name, err)
+		return err
 	}
-	newData, err := json.Marshal(newBinding)
-	if err != nil {
-		return fmt.Errorf("failed to marshal the new resource binding(%s/%s): %v", newBinding.Namespace, newBinding.Name, err)
-	}
-	patchBytes, err := jsonpatch.CreateMergePatch(oldData, newData)
-	if err != nil {
-		return fmt.Errorf("failed to create a merge patch: %v", err)
-	}
-	if "{}" == string(patchBytes) {
+	if len(patchBytes) == 0 {
 		return nil
 	}
 
@@ -649,19 +638,11 @@ func (s *Scheduler) patchScheduleResultForClusterResourceBinding(oldBinding *wor
 	newBinding.Annotations[util.PolicyPlacementAnnotation] = placement
 	newBinding.Spec.Clusters = scheduleResult
 
-	oldData, err := json.Marshal(oldBinding)
+	patchBytes, err := helper.GenMergePatch(oldBinding, newBinding)
 	if err != nil {
-		return fmt.Errorf("failed to marshal the existing cluster resource binding(%s): %v", oldBinding.Name, err)
+		return err
 	}
-	newData, err := json.Marshal(newBinding)
-	if err != nil {
-		return fmt.Errorf("failed to marshal the new resource binding(%s): %v", newBinding.Name, err)
-	}
-	patchBytes, err := jsonpatch.CreateMergePatch(oldData, newData)
-	if err != nil {
-		return fmt.Errorf("failed to create a merge patch: %v", err)
-	}
-	if "{}" == string(patchBytes) {
+	if len(patchBytes) == 0 {
 		return nil
 	}
 
@@ -727,27 +708,32 @@ func patchBindingStatusCondition(karmadaClient karmadaclientset.Interface, rb *w
 	if newScheduledCondition.Status == metav1.ConditionTrue {
 		updateRB.Status.SchedulerObservedGeneration = rb.Generation
 	}
+
+	if reflect.DeepEqual(rb.Status, updateRB.Status) {
+		return nil
+	}
 	return patchBindingStatus(karmadaClient, rb, updateRB)
 }
 
 // patchBindingStatusWithAffinityName patches schedule status with affinityName of ResourceBinding when necessary.
 func patchBindingStatusWithAffinityName(karmadaClient karmadaclientset.Interface, rb *workv1alpha2.ResourceBinding, affinityName string) error {
-	klog.V(4).Infof("Begin to patch status with affinityName(%s) to ResourceBinding(%s/%s).", affinityName, rb.Namespace, rb.Name)
+	if rb.Status.SchedulerObservedAffinityName == affinityName {
+		return nil
+	}
 
+	klog.V(4).Infof("Begin to patch status with affinityName(%s) to ResourceBinding(%s/%s).", affinityName, rb.Namespace, rb.Name)
 	updateRB := rb.DeepCopy()
 	updateRB.Status.SchedulerObservedAffinityName = affinityName
 	return patchBindingStatus(karmadaClient, rb, updateRB)
 }
 
 func patchBindingStatus(karmadaClient karmadaclientset.Interface, rb, updateRB *workv1alpha2.ResourceBinding) error {
-	// Short path, ignore patch if no change.
-	if reflect.DeepEqual(rb.Status, updateRB.Status) {
-		return nil
-	}
-
 	patchBytes, err := helper.GenMergePatch(rb, updateRB)
 	if err != nil {
-		return fmt.Errorf("failed to create a merge patch: %v", err)
+		return err
+	}
+	if len(patchBytes) == 0 {
+		return nil
 	}
 
 	_, err = karmadaClient.WorkV1alpha2().ResourceBindings(rb.Namespace).Patch(context.TODO(), rb.Name, types.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
@@ -771,11 +757,19 @@ func patchClusterBindingStatusCondition(karmadaClient karmadaclientset.Interface
 	if newScheduledCondition.Status == metav1.ConditionTrue {
 		updateCRB.Status.SchedulerObservedGeneration = crb.Generation
 	}
+
+	if reflect.DeepEqual(crb.Status, updateCRB.Status) {
+		return nil
+	}
 	return patchClusterResourceBindingStatus(karmadaClient, crb, updateCRB)
 }
 
 // patchClusterBindingStatusWithAffinityName patches schedule status with affinityName of ClusterResourceBinding when necessary.
 func patchClusterBindingStatusWithAffinityName(karmadaClient karmadaclientset.Interface, crb *workv1alpha2.ClusterResourceBinding, affinityName string) error {
+	if crb.Status.SchedulerObservedAffinityName == affinityName {
+		return nil
+	}
+
 	klog.V(4).Infof("Begin to patch status with affinityName(%s) to ClusterResourceBinding(%s).", affinityName, crb.Name)
 	updateCRB := crb.DeepCopy()
 	updateCRB.Status.SchedulerObservedAffinityName = affinityName
@@ -783,14 +777,12 @@ func patchClusterBindingStatusWithAffinityName(karmadaClient karmadaclientset.In
 }
 
 func patchClusterResourceBindingStatus(karmadaClient karmadaclientset.Interface, crb, updateCRB *workv1alpha2.ClusterResourceBinding) error {
-	// Short path, ignore patch if no change.
-	if reflect.DeepEqual(crb.Status, updateCRB.Status) {
-		return nil
-	}
-
 	patchBytes, err := helper.GenMergePatch(crb, updateCRB)
 	if err != nil {
-		return fmt.Errorf("failed to create a merge patch: %v", err)
+		return err
+	}
+	if len(patchBytes) == 0 {
+		return nil
 	}
 
 	_, err = karmadaClient.WorkV1alpha2().ClusterResourceBindings().Patch(context.TODO(), crb.Name, types.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
