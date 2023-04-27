@@ -74,6 +74,9 @@ type Scheduler struct {
 	clusterLister        clusterlister.ClusterLister
 	informerFactory      informerfactory.SharedInformerFactory
 
+	// clusterReconcileWorker reconciles cluster changes to trigger corresponding
+	// ResourceBinding/ClusterResourceBinding rescheduling.
+	clusterReconcileWorker util.AsyncWorker
 	// TODO: implement a priority scheduling queue
 	queue workqueue.RateLimitingInterface
 
@@ -218,6 +221,11 @@ func NewScheduler(dynamicClient dynamic.Interface, karmadaClient karmadaclientse
 		schedulerCache:       schedulerCache,
 	}
 
+	sched.clusterReconcileWorker = util.NewAsyncWorker(util.Options{
+		Name:          "ClusterReconcileWorker",
+		ReconcileFunc: sched.reconcileCluster,
+	})
+
 	if options.enableSchedulerEstimator {
 		sched.enableSchedulerEstimator = options.enableSchedulerEstimator
 		sched.disableSchedulerEstimatorInPullMode = options.disableSchedulerEstimatorInPullMode
@@ -254,6 +262,8 @@ func (s *Scheduler) Run(ctx context.Context) {
 
 	s.informerFactory.Start(stopCh)
 	s.informerFactory.WaitForCacheSync(stopCh)
+
+	s.clusterReconcileWorker.Run(1, stopCh)
 
 	go wait.Until(s.worker, time.Second, stopCh)
 
@@ -334,6 +344,15 @@ func (s *Scheduler) doScheduleBinding(namespace, name string) (err error) {
 	}
 	// TODO(dddddai): reschedule bindings on cluster change
 	klog.V(3).Infof("Don't need to schedule ResourceBinding(%s/%s)", rb.Namespace, rb.Name)
+
+	// If no scheduling is required, we need to ensure that binding.Generation is equal to
+	// binding.Status.SchedulerObservedGeneration which means the current status of binding
+	// is the latest status of successful scheduling.
+	if rb.Generation != rb.Status.SchedulerObservedGeneration {
+		updateRB := rb.DeepCopy()
+		updateRB.Status.SchedulerObservedGeneration = updateRB.Generation
+		return patchBindingStatus(s.KarmadaClient, rb, updateRB)
+	}
 	return nil
 }
 
@@ -382,6 +401,15 @@ func (s *Scheduler) doScheduleClusterBinding(name string) (err error) {
 	}
 	// TODO(dddddai): reschedule bindings on cluster change
 	klog.Infof("Don't need to schedule ClusterResourceBinding(%s)", name)
+
+	// If no scheduling is required, we need to ensure that binding.Generation is equal to
+	// binding.Status.SchedulerObservedGeneration which means the current status of binding
+	// is the latest status of successful scheduling.
+	if crb.Generation != crb.Status.SchedulerObservedGeneration {
+		updateCRB := crb.DeepCopy()
+		updateCRB.Status.SchedulerObservedGeneration = updateCRB.Generation
+		return patchClusterResourceBindingStatus(s.KarmadaClient, crb, updateCRB)
+	}
 	return nil
 }
 
@@ -515,6 +543,7 @@ func (s *Scheduler) patchScheduleResultForResourceBinding(oldBinding *workv1alph
 	_, err = s.KarmadaClient.WorkV1alpha2().ResourceBindings(newBinding.Namespace).Patch(context.TODO(), newBinding.Name, types.MergePatchType, patchBytes, metav1.PatchOptions{})
 	if err != nil {
 		klog.Errorf("Failed to patch schedule to ResourceBinding(%s/%s): %v", oldBinding.Namespace, oldBinding.Name, err)
+		return err
 	}
 
 	klog.V(4).Infof("Patch schedule to ResourceBinding(%s/%s) succeed", oldBinding.Namespace, oldBinding.Name)
@@ -649,7 +678,13 @@ func (s *Scheduler) patchScheduleResultForClusterResourceBinding(oldBinding *wor
 	}
 
 	_, err = s.KarmadaClient.WorkV1alpha2().ClusterResourceBindings().Patch(context.TODO(), newBinding.Name, types.MergePatchType, patchBytes, metav1.PatchOptions{})
-	return err
+	if err != nil {
+		klog.Errorf("Failed to patch schedule to ClusterResourceBinding(%s): %v", oldBinding.Name, err)
+		return err
+	}
+
+	klog.V(4).Infof("Patch schedule to ClusterResourceBinding(%s) succeed", oldBinding.Name)
+	return nil
 }
 
 func (s *Scheduler) handleErr(err error, key interface{}) {
