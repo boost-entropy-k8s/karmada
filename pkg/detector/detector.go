@@ -421,6 +421,7 @@ func (d *ResourceDetector) ApplyPolicy(object *unstructured.Unstructured, object
 			bindingCopy.Spec.SchedulerName = binding.Spec.SchedulerName
 			bindingCopy.Spec.Placement = binding.Spec.Placement
 			bindingCopy.Spec.Failover = binding.Spec.Failover
+			bindingCopy.Spec.ConflictResolution = binding.Spec.ConflictResolution
 			return nil
 		})
 		if err != nil {
@@ -497,6 +498,7 @@ func (d *ResourceDetector) ApplyClusterPolicy(object *unstructured.Unstructured,
 				bindingCopy.Spec.SchedulerName = binding.Spec.SchedulerName
 				bindingCopy.Spec.Placement = binding.Spec.Placement
 				bindingCopy.Spec.Failover = binding.Spec.Failover
+				bindingCopy.Spec.ConflictResolution = binding.Spec.ConflictResolution
 				return nil
 			})
 			if err != nil {
@@ -541,6 +543,7 @@ func (d *ResourceDetector) ApplyClusterPolicy(object *unstructured.Unstructured,
 			bindingCopy.Spec.SchedulerName = binding.Spec.SchedulerName
 			bindingCopy.Spec.Placement = binding.Spec.Placement
 			bindingCopy.Spec.Failover = binding.Spec.Failover
+			bindingCopy.Spec.ConflictResolution = binding.Spec.ConflictResolution
 			return nil
 		})
 		if err != nil {
@@ -636,10 +639,11 @@ func (d *ResourceDetector) BuildResourceBinding(object *unstructured.Unstructure
 			Finalizers: []string{util.BindingControllerFinalizer},
 		},
 		Spec: workv1alpha2.ResourceBindingSpec{
-			PropagateDeps: policySpec.PropagateDeps,
-			SchedulerName: policySpec.SchedulerName,
-			Placement:     &policySpec.Placement,
-			Failover:      policySpec.Failover,
+			PropagateDeps:      policySpec.PropagateDeps,
+			SchedulerName:      policySpec.SchedulerName,
+			Placement:          &policySpec.Placement,
+			Failover:           policySpec.Failover,
+			ConflictResolution: policySpec.ConflictResolution,
 			Resource: workv1alpha2.ObjectReference{
 				APIVersion:      object.GetAPIVersion(),
 				Kind:            object.GetKind(),
@@ -677,10 +681,11 @@ func (d *ResourceDetector) BuildClusterResourceBinding(object *unstructured.Unst
 			Finalizers: []string{util.ClusterResourceBindingControllerFinalizer},
 		},
 		Spec: workv1alpha2.ResourceBindingSpec{
-			PropagateDeps: policySpec.PropagateDeps,
-			SchedulerName: policySpec.SchedulerName,
-			Placement:     &policySpec.Placement,
-			Failover:      policySpec.Failover,
+			PropagateDeps:      policySpec.PropagateDeps,
+			SchedulerName:      policySpec.SchedulerName,
+			Placement:          &policySpec.Placement,
+			Failover:           policySpec.Failover,
+			ConflictResolution: policySpec.ConflictResolution,
 			Resource: workv1alpha2.ObjectReference{
 				APIVersion:      object.GetAPIVersion(),
 				Kind:            object.GetKind(),
@@ -981,10 +986,11 @@ func (d *ResourceDetector) HandleClusterPropagationPolicyDeletion(policyName str
 }
 
 // HandlePropagationPolicyCreationOrUpdate handles PropagationPolicy add and update event.
-// When a new policy arrives, should first check whether existing objects are no longer
-// matched by the current policy, if yes, clean the labels on the object.
+// When a new policy arrives, should check whether existing objects are no longer matched by the current policy,
+// if yes, clean the labels on the object.
 // And then check if object in waiting list matches the policy, if yes remove the object
 // from waiting list and throw the object to it's reconcile queue. If not, do nothing.
+// Finally, handle the propagation policy preemption process if preemption is enabled.
 func (d *ResourceDetector) HandlePropagationPolicyCreationOrUpdate(policy *policyv1alpha1.PropagationPolicy) error {
 	err := d.cleanPPUnmatchedResourceBindings(policy.Namespace, policy.Name, policy.Spec.ResourceSelectors)
 	if err != nil {
@@ -1023,14 +1029,20 @@ func (d *ResourceDetector) HandlePropagationPolicyCreationOrUpdate(policy *polic
 		d.Processor.Add(key)
 	}
 
+	// if preemption is enabled, handle the preemption process.
+	if preemptionEnabled(policy.Spec.Preemption) {
+		return d.handlePropagationPolicyPreemption(policy)
+	}
+
 	return nil
 }
 
 // HandleClusterPropagationPolicyCreationOrUpdate handles ClusterPropagationPolicy add and update event.
-// When a new policy arrives, should first check whether existing objects are no longer
-// matched by the current policy, if yes, clean the labels on the object.
+// When a new policy arrives, should check whether existing objects are no longer matched by the current policy,
+// if yes, clean the labels on the object.
 // And then check if object in waiting list matches the policy, if yes remove the object
 // from waiting list and throw the object to it's reconcile queue. If not, do nothing.
+// Finally, handle the cluster propagation policy preemption process if preemption is enabled.
 func (d *ResourceDetector) HandleClusterPropagationPolicyCreationOrUpdate(policy *policyv1alpha1.ClusterPropagationPolicy) error {
 	err := d.cleanCPPUnmatchedResourceBindings(policy.Name, policy.Spec.ResourceSelectors)
 	if err != nil {
@@ -1083,6 +1095,11 @@ func (d *ResourceDetector) HandleClusterPropagationPolicyCreationOrUpdate(policy
 	for _, key := range matchedKeys {
 		d.RemoveWaiting(key)
 		d.Processor.Add(key)
+	}
+
+	// if preemption is enabled, handle the preemption process.
+	if preemptionEnabled(policy.Spec.Preemption) {
+		return d.handleClusterPropagationPolicyPreemption(policy)
 	}
 
 	return nil
