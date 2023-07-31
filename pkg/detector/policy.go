@@ -89,6 +89,10 @@ func (d *ResourceDetector) propagateResource(object *unstructured.Unstructured, 
 func (d *ResourceDetector) getAndApplyPolicy(object *unstructured.Unstructured, objectKey keys.ClusterWideKey, policyNamespace, policyName string) error {
 	policyObject, err := d.propagationPolicyLister.ByNamespace(policyNamespace).Get(policyName)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.V(4).Infof("PropagationPolicy(%s/%s) has been removed.", policyNamespace, policyName)
+			return d.HandlePropagationPolicyDeletion(policyNamespace, policyName)
+		}
 		klog.Errorf("Failed to get claimed policy(%s/%s),: %v", policyNamespace, policyName, err)
 		return err
 	}
@@ -122,6 +126,11 @@ func (d *ResourceDetector) getAndApplyPolicy(object *unstructured.Unstructured, 
 func (d *ResourceDetector) getAndApplyClusterPolicy(object *unstructured.Unstructured, objectKey keys.ClusterWideKey, policyName string) error {
 	policyObject, err := d.clusterPropagationPolicyLister.Get(policyName)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.V(4).Infof("ClusterPropagationPolicy(%s) has been removed.", policyName)
+			return d.HandleClusterPropagationPolicyDeletion(policyName)
+		}
+
 		klog.Errorf("Failed to get claimed policy(%s),: %v", policyName, err)
 		return err
 	}
@@ -319,4 +328,14 @@ func (d *ResourceDetector) listCPPDerivedCRB(policyName string) (*workv1alpha2.C
 	}
 
 	return bindings, nil
+}
+
+// excludeClusterPolicy excludes cluster propagation policy.
+// If propagation policy was claimed, cluster propagation policy should not exists.
+func excludeClusterPolicy(objLabels map[string]string) bool {
+	if _, ok := objLabels[policyv1alpha1.ClusterPropagationPolicyLabel]; !ok {
+		return false
+	}
+	delete(objLabels, policyv1alpha1.ClusterPropagationPolicyLabel)
+	return true
 }
