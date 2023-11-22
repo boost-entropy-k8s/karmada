@@ -1,9 +1,26 @@
 #!/usr/bin/env bash
+# Copyright 2020 The Karmada Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # This script only fits for Linux, macOS adaptation will come soon
 
 set -o errexit
 set -o nounset
 set -o pipefail
+
+REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
+source "${REPO_ROOT}"/hack/util.sh
 
 function usage() {
   echo "This script starts a kube cluster by kind."
@@ -11,7 +28,7 @@ function usage() {
   echo "Example: hack/create-cluster.sh host /root/.kube/karmada.config"
 }
 
-CLUSTER_VERSION=${CLUSTER_VERSION:-"kindest/node:v1.27.3"}
+CLUSTER_VERSION=${CLUSTER_VERSION:-"${DEFAULT_CLUSTER_VERSION}"}
 
 if [[ $# -lt 1 ]]; then
   usage

@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Karmada Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package detector
 
 import (
@@ -1046,18 +1062,19 @@ func (d *ResourceDetector) HandlePropagationPolicyDeletion(policyNS string, poli
 	}
 
 	for index, binding := range rbs.Items {
-		// Cleanup the labels from the reference binding so that the karmada scheduler won't reschedule the binding.
-		if err := d.CleanupResourceBindingLabels(&rbs.Items[index], policyv1alpha1.PropagationPolicyNamespaceLabel, policyv1alpha1.PropagationPolicyNameLabel); err != nil {
-			klog.Errorf("Failed to cleanup label from resource binding(%s/%s) when propagation policy(%s/%s) removing, error: %v",
-				binding.Namespace, binding.Name, policyNS, policyName, err)
+		// Must remove the labels from the resource template ahead of ResourceBinding, otherwise might lose the chance
+		// to do that in a retry loop(in particular, the label was successfully removed from ResourceBinding, but
+		// resource template not), since the ResourceBinding will not be listed again.
+		if err := d.CleanupLabels(binding.Spec.Resource, policyv1alpha1.PropagationPolicyNamespaceLabel, policyv1alpha1.PropagationPolicyNameLabel); err != nil {
+			klog.Errorf("Failed to clean up label from resource(%s-%s/%s) when propagation policy(%s/%s) removing, error: %v",
+				binding.Spec.Resource.Kind, binding.Spec.Resource.Namespace, binding.Spec.Resource.Name, policyNS, policyName, err)
 			return err
 		}
 
-		// Cleanup the labels from the object referencing by binding.
-		// In addition, this will give the object a chance to match another policy.
-		if err := d.CleanupLabels(binding.Spec.Resource, policyv1alpha1.PropagationPolicyNamespaceLabel, policyv1alpha1.PropagationPolicyNameLabel); err != nil {
-			klog.Errorf("Failed to cleanup label from resource(%s-%s/%s) when propagation policy(%s/%s) removing, error: %v",
-				binding.Spec.Resource.Kind, binding.Spec.Resource.Namespace, binding.Spec.Resource.Name, policyNS, policyName, err)
+		// Clean up the labels from the reference binding so that the karmada scheduler won't reschedule the binding.
+		if err := d.CleanupResourceBindingLabels(&rbs.Items[index], policyv1alpha1.PropagationPolicyNamespaceLabel, policyv1alpha1.PropagationPolicyNameLabel); err != nil {
+			klog.Errorf("Failed to clean up label from resource binding(%s/%s) when propagation policy(%s/%s) removing, error: %v",
+				binding.Namespace, binding.Name, policyNS, policyName, err)
 			return err
 		}
 	}
@@ -1082,18 +1099,19 @@ func (d *ResourceDetector) HandleClusterPropagationPolicyDeletion(policyName str
 		errs = append(errs, err)
 	} else if len(crbs.Items) > 0 {
 		for index, binding := range crbs.Items {
-			// Cleanup the labels from the reference binding so that the karmada scheduler won't reschedule the binding.
-			if err := d.CleanupClusterResourceBindingLabels(&crbs.Items[index], policyv1alpha1.ClusterPropagationPolicyLabel); err != nil {
-				klog.Errorf("Failed to cleanup label from cluster resource binding(%s) when cluster propagation policy(%s) removing, error: %v",
-					binding.Name, policyName, err)
+			// Must remove the labels from the resource template ahead of ClusterResourceBinding, otherwise might lose the chance
+			// to do that in a retry loop(in particular, the label was successfully removed from ClusterResourceBinding, but
+			// resource template not), since the ClusterResourceBinding will not be listed again.
+			if err := d.CleanupLabels(binding.Spec.Resource, policyv1alpha1.ClusterPropagationPolicyLabel); err != nil {
+				klog.Errorf("Failed to clean up label from resource(%s-%s) when cluster propagation policy(%s) removing, error: %v",
+					binding.Spec.Resource.Kind, binding.Spec.Resource.Name, policyName, err)
 				errs = append(errs, err)
 			}
 
-			// Cleanup the labels from the object referencing by binding.
-			// In addition, this will give the object a chance to match another policy.
-			if err := d.CleanupLabels(binding.Spec.Resource, policyv1alpha1.ClusterPropagationPolicyLabel); err != nil {
-				klog.Errorf("Failed to cleanup label from resource(%s-%s/%s) when cluster resource binding(%s) removing, error: %v",
-					binding.Spec.Resource.Kind, binding.Spec.Resource.Namespace, binding.Spec.Resource.Name, binding.Name, err)
+			// Clean up the labels from the reference binding so that the karmada scheduler won't reschedule the binding.
+			if err := d.CleanupClusterResourceBindingLabels(&crbs.Items[index], policyv1alpha1.ClusterPropagationPolicyLabel); err != nil {
+				klog.Errorf("Failed to clean up label from cluster resource binding(%s) when cluster propagation policy(%s) removing, error: %v",
+					binding.Name, policyName, err)
 				errs = append(errs, err)
 			}
 		}
@@ -1106,17 +1124,19 @@ func (d *ResourceDetector) HandleClusterPropagationPolicyDeletion(policyName str
 		errs = append(errs, err)
 	} else if len(rbs.Items) > 0 {
 		for index, binding := range rbs.Items {
-			// Cleanup the labels from the reference binding so that the karmada scheduler won't reschedule the binding.
-			if err := d.CleanupResourceBindingLabels(&rbs.Items[index], policyv1alpha1.ClusterPropagationPolicyLabel); err != nil {
-				klog.Errorf("Failed to cleanup label from resource binding(%s/%s) when cluster propagation policy(%s) removing, error: %v",
-					binding.Namespace, binding.Name, policyName, err)
+			// Must remove the labels from the resource template ahead of ResourceBinding, otherwise might lose the chance
+			// to do that in a retry loop(in particular, the label was successfully removed from ResourceBinding, but
+			// resource template not), since the ResourceBinding will not be listed again.
+			if err := d.CleanupLabels(binding.Spec.Resource, policyv1alpha1.ClusterPropagationPolicyLabel); err != nil {
+				klog.Errorf("Failed to clean up label from resource(%s-%s/%s) when cluster propagation policy(%s) removing, error: %v",
+					binding.Spec.Resource.Kind, binding.Spec.Resource.Namespace, binding.Spec.Resource.Name, policyName, err)
 				errs = append(errs, err)
 			}
 
-			// Cleanup the labels from the object referencing by binding.
-			// In addition, this will give the object a chance to match another policy.
-			if err := d.CleanupLabels(binding.Spec.Resource, policyv1alpha1.ClusterPropagationPolicyLabel); err != nil {
-				klog.Errorf("Failed to cleanup label from resource binding(%s/%s), error: %v", binding.Namespace, binding.Name, err)
+			// Clean up the labels from the reference binding so that the karmada scheduler won't reschedule the binding.
+			if err := d.CleanupResourceBindingLabels(&rbs.Items[index], policyv1alpha1.ClusterPropagationPolicyLabel); err != nil {
+				klog.Errorf("Failed to clean up label from resource binding(%s/%s) when cluster propagation policy(%s) removing, error: %v",
+					binding.Namespace, binding.Name, policyName, err)
 				errs = append(errs, err)
 			}
 		}
