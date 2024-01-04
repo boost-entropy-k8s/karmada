@@ -66,10 +66,13 @@ linters-settings:
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#if-return
       - name: if-return
         disabled: true
+      - name: package-comments
       - name: superfluous-else
         arguments:
           - preserveScope
       - name: error-strings
+      - name: error-return
+      - name: receiver-naming
   staticcheck:
     checks:
       - all
