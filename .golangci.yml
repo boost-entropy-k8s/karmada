@@ -78,6 +78,13 @@ linters-settings:
       - name: error-naming
       - name: dot-imports
       - name: errorf
+      - name: exported
+      - name: var-declaration
+      - name: blank-imports
+      - name: indent-error-flow
+      - name: unreachable-code
+      - name: var-naming
+      - name: redefines-builtin-id
   staticcheck:
     checks:
       - all
