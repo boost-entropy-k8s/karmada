@@ -45,7 +45,7 @@ func CreateOrUpdateWork(client client.Client, workMeta metav1.ObjectMeta, resour
 	if conflictResolution, ok := workMeta.GetAnnotations()[workv1alpha2.ResourceConflictResolutionAnnotation]; ok {
 		util.ReplaceAnnotation(workload, workv1alpha2.ResourceConflictResolutionAnnotation, conflictResolution)
 	}
-	util.MergeAnnotation(workload, workv1alpha2.ResourceTemplateUIDAnnotation, string(workload.GetUID()))
+	util.ReplaceAnnotation(workload, workv1alpha2.ResourceTemplateUIDAnnotation, string(workload.GetUID()))
 	util.RecordManagedAnnotations(workload)
 	workloadJSON, err := workload.MarshalJSON()
 	if err != nil {
@@ -76,8 +76,6 @@ func CreateOrUpdateWork(client client.Client, workMeta metav1.ObjectMeta, resour
 				return fmt.Errorf("work %s/%s is being deleted", runtimeObject.GetNamespace(), runtimeObject.GetName())
 			}
 
-			// TODO: Delete following one line in release-1.9
-			delete(runtimeObject.Labels, workv1alpha2.WorkUIDLabel)
 			runtimeObject.Spec = work.Spec
 			runtimeObject.Labels = work.Labels
 			runtimeObject.Annotations = work.Annotations
