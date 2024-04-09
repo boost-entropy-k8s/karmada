@@ -3,6 +3,10 @@ on:
   # Run this workflow every time a new commit pushed to upstream/fork repository.
   # Run workflow on fork repository will help contributors find and resolve issues before sending a PR.
   push:
+    # Exclude branches created by Dependabot to avoid triggering current workflow
+    # for PRs initiated by Dependabot.
+    branches-ignore:
+      - 'dependabot/**'
   pull_request:
 # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#concurrency
 concurrency:
@@ -16,7 +20,7 @@ jobs:
       - name: checkout code
         uses: actions/checkout@v3
       - name: install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: 1.21.8
       - name: verify license
@@ -41,7 +45,7 @@ jobs:
         with:
           path: ${{ env.GOPATH }}/src/github.com/karmada-io/karmada
       - name: install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: 1.21.8
       - name: Install Protoc
@@ -73,7 +77,7 @@ jobs:
           # We need to guess version via git tags.
           fetch-depth: 0
       - name: install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: 1.21.8
       - name: compile
@@ -88,7 +92,7 @@ jobs:
       - name: checkout code
         uses: actions/checkout@v3
       - name: install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: 1.21.8
       - name: make test
@@ -139,7 +143,7 @@ jobs:
           # We need to guess version via git tags.
           fetch-depth: 0
       - name: install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: 1.21.8
       - name: setup e2e test environment
