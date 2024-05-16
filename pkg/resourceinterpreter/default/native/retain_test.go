@@ -113,6 +113,10 @@ func Test_retainK8sWorkloadReplicas(t *testing.T) {
 func Test_retainSecretServiceAccountToken(t *testing.T) {
 	createSecret := func(secretType corev1.SecretType, uuid, key, value string) *unstructured.Unstructured {
 		ret, _ := helper.ToUnstructured(&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{corev1.ServiceAccountUIDKey: uuid},
+			},
+			Data: map[string][]byte{key: []byte(value)},
 			Type: secretType,
 		})
 		return ret
@@ -173,6 +177,84 @@ func Test_retainSecretServiceAccountToken(t *testing.T) {
 			got, err := retainSecretServiceAccountToken(tt.args.desired, tt.args.observed)
 			assert.Nil(t, err, "retainSecretServiceAccountToken() error = %v", err)
 			assert.Equalf(t, tt.want, got, "retainSecretServiceAccountToken(%v, %v)", tt.args.desired, tt.args.observed)
+		})
+	}
+}
+
+func Test_retainPersistentVolumeFields(t *testing.T) {
+	createPV := func(claimRef *corev1.ObjectReference) *unstructured.Unstructured {
+		ret, _ := helper.ToUnstructured(&corev1.PersistentVolume{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "pv",
+			},
+			Spec: corev1.PersistentVolumeSpec{
+				ClaimRef: claimRef,
+			},
+		})
+		return ret
+	}
+	type args struct {
+		desired  *unstructured.Unstructured
+		observed *unstructured.Unstructured
+	}
+	tests := []struct {
+		name string
+		args args
+		want *unstructured.Unstructured
+	}{
+		{
+			name: "retain claimRef",
+			args: args{
+				desired:  createPV(&corev1.ObjectReference{Name: "pvc-1", Namespace: "default"}),
+				observed: createPV(&corev1.ObjectReference{Name: "pvc-2", Namespace: "default"}),
+			},
+			want: createPV(&corev1.ObjectReference{Name: "pvc-2", Namespace: "default"}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := retainPersistentVolumeFields(tt.args.desired, tt.args.observed)
+			assert.Nil(t, err, "retainPersistentVolumeFields() error = %v", err)
+			assert.Equalf(t, tt.want, got, "retainPersistentVolumeFields(%v, %v)", tt.args.desired, tt.args.observed)
+		})
+	}
+}
+
+func Test_retainPersistentVolumeClaimFields(t *testing.T) {
+	createPVC := func(volumeName string) *unstructured.Unstructured {
+		ret, _ := helper.ToUnstructured(&corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "pvc",
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				VolumeName: volumeName,
+			},
+		})
+		return ret
+	}
+	type args struct {
+		desired  *unstructured.Unstructured
+		observed *unstructured.Unstructured
+	}
+	tests := []struct {
+		name string
+		args args
+		want *unstructured.Unstructured
+	}{
+		{
+			name: "retain observed volume name",
+			args: args{
+				desired:  createPVC("desired-volume-name"),
+				observed: createPVC("observed-volume-name"),
+			},
+			want: createPVC("observed-volume-name"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := retainPersistentVolumeClaimFields(tt.args.desired, tt.args.observed)
+			assert.Nil(t, err, "retainPersistentVolumeClaimFields() error = %v", err)
+			assert.Equalf(t, tt.want, got, "retainPersistentVolumeClaimFields(%v, %v)", tt.args.desired, tt.args.observed)
 		})
 	}
 }
