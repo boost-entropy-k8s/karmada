@@ -18,7 +18,17 @@ spec:
     singular: resourceinterpretercustomization
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.target.apiVersion
+      name: TARGET-API-VERSION
+      type: string
+    - jsonPath: .spec.target.kind
+      name: TARGET-KIND
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: AGE
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
@@ -372,3 +382,4 @@ spec:
         type: object
     served: true
     storage: true
+    subresources: {}
