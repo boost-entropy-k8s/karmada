@@ -547,7 +547,8 @@ var _ = ginkgo.Describe("[AdvancedClusterPropagation] propagation testing", func
 })
 
 // ImplicitPriority more than one PP matches the object, we should choose the most suitable one.
-var _ = ginkgo.Describe("[ImplicitPriority] propagation testing", func() {
+// Set it to run sequentially to avoid affecting other test cases.
+var _ = framework.SerialDescribe("[ImplicitPriority] propagation testing", func() {
 	ginkgo.Context("priorityMatchName/priorityMatchLabel/priorityMatchAll propagation testing", func() {
 		var priorityMatchName, priorityMatchLabelSelector, priorityMatchAll string
 		var deploymentNamespace, deploymentName string
@@ -570,6 +571,7 @@ var _ = ginkgo.Describe("[ImplicitPriority] propagation testing", func() {
 					APIVersion: deployment.APIVersion,
 					Kind:       deployment.Kind,
 					Name:       deployment.Name,
+					Namespace:  deployment.Namespace,
 				},
 			}, policyv1alpha1.Placement{
 				ClusterAffinity: &policyv1alpha1.ClusterAffinity{
@@ -580,6 +582,7 @@ var _ = ginkgo.Describe("[ImplicitPriority] propagation testing", func() {
 				{
 					APIVersion:    deployment.APIVersion,
 					Kind:          deployment.Kind,
+					Namespace:     deployment.Namespace,
 					LabelSelector: metav1.SetAsLabelSelector(labels.Set{implicitPriorityLabelKey: implicitPriorityLabelValue}),
 				},
 			}, policyv1alpha1.Placement{
@@ -591,6 +594,7 @@ var _ = ginkgo.Describe("[ImplicitPriority] propagation testing", func() {
 				{
 					APIVersion: deployment.APIVersion,
 					Kind:       deployment.Kind,
+					Namespace:  deployment.Namespace,
 				},
 			}, policyv1alpha1.Placement{
 				ClusterAffinity: &policyv1alpha1.ClusterAffinity{
