@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package propagationpolicy
+package clusterpropagationpolicy
 
 import (
 	"context"
@@ -89,10 +89,10 @@ func TestMutatingAdmission_Handle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := NewMutatingHandler(
+			v := NewMutatingHandler(
 				notReadyTolerationSeconds, unreachableTolerationSeconds, tt.decoder,
 			)
-			got := m.Handle(context.Background(), tt.req)
+			got := v.Handle(context.Background(), tt.req)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Handle() = %v, want %v", got, tt.want)
 			}
@@ -101,20 +101,18 @@ func TestMutatingAdmission_Handle(t *testing.T) {
 }
 
 func TestMutatingAdmission_Handle_FullCoverage(t *testing.T) {
-	// Define the pp name and namespace to be used in the test.
-	policyName := "test-propagation-policy"
-	namespace := "test-namespace"
+	// Define the cp policy name to be used in the test.
+	policyName := "test-cp-policy"
 
-	// Mock a request with a specific namespace.
+	// Mock admission request with no specific namespace.
 	req := admission.Request{
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Namespace: namespace,
 			Operation: admissionv1.Create,
 		},
 	}
 
-	// Create the initial pp with default values for testing.
-	pp := &policyv1alpha1.PropagationPolicy{
+	// Create the initial cp policy with default values for testing.
+	cpPolicy := &policyv1alpha1.ClusterPropagationPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 		},
@@ -130,11 +128,9 @@ func TestMutatingAdmission_Handle_FullCoverage(t *testing.T) {
 			PropagateDeps: false,
 			ResourceSelectors: []policyv1alpha1.ResourceSelector{
 				{
-					Namespace:  "",
 					Kind:       util.ServiceImportKind,
 					APIVersion: mcsv1alpha1.GroupVersion.String(),
 				},
-				{Namespace: ""},
 			},
 			Failover: &policyv1alpha1.FailoverBehavior{
 				Application: &policyv1alpha1.ApplicationFailoverBehavior{
@@ -145,14 +141,14 @@ func TestMutatingAdmission_Handle_FullCoverage(t *testing.T) {
 		},
 	}
 
-	// Define the expected pp after mutations.
-	wantPP := &policyv1alpha1.PropagationPolicy{
+	// Define the expected cp policy after mutations.
+	wantCPPolicy := &policyv1alpha1.ClusterPropagationPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 			Labels: map[string]string{
-				policyv1alpha1.PropagationPolicyPermanentIDLabel: "some-unique-uuid",
+				policyv1alpha1.ClusterPropagationPolicyPermanentIDLabel: "some-unique-uuid",
 			},
-			Finalizers: []string{util.PropagationPolicyControllerFinalizer},
+			Finalizers: []string{util.ClusterPropagationPolicyControllerFinalizer},
 		},
 		Spec: policyv1alpha1.PropagationSpec{
 			Placement: policyv1alpha1.Placement{
@@ -174,11 +170,9 @@ func TestMutatingAdmission_Handle_FullCoverage(t *testing.T) {
 			PropagateDeps: true,
 			ResourceSelectors: []policyv1alpha1.ResourceSelector{
 				{
-					Namespace:  namespace,
 					Kind:       util.ServiceImportKind,
 					APIVersion: mcsv1alpha1.GroupVersion.String(),
 				},
-				{Namespace: namespace},
 			},
 			Failover: &policyv1alpha1.FailoverBehavior{
 				Application: &policyv1alpha1.ApplicationFailoverBehavior{
@@ -189,15 +183,15 @@ func TestMutatingAdmission_Handle_FullCoverage(t *testing.T) {
 		},
 	}
 
-	// Mock decoder that decodes the request into the pp object.
+	// Mock decoder that decodes the request into the cp policy object.
 	decoder := &fakeMutationDecoder{
-		obj: pp,
+		obj: cpPolicy,
 	}
 
-	// Marshal the expected pp to simulate the final mutated object.
-	wantBytes, err := json.Marshal(wantPP)
+	// Marshal the expected cp policy to simulate the final mutated object.
+	wantBytes, err := json.Marshal(wantCPPolicy)
 	if err != nil {
-		t.Fatalf("Failed to marshal expected propagation policy: %v", err)
+		t.Fatalf("Failed to marshal expected cp policy: %v", err)
 	}
 	req.Object.Raw = wantBytes
 
@@ -214,10 +208,10 @@ func TestMutatingAdmission_Handle_FullCoverage(t *testing.T) {
 		t.Errorf("Handle() returned an unexpected number of patches. Expected one patch, received: %v", got.Patches)
 	}
 
-	// Verify that the only patch applied is for the UUID label
-	// If any other patches are present, it indicates that the propagation policy was not handled as expected.
+	// Verify that the only patch applied is for the UUID label.
+	// If any other patches are present, it indicates that the cp policy was not handled as expected.
 	firstPatch := got.Patches[0]
-	if firstPatch.Operation != "replace" || firstPatch.Path != "/metadata/labels/propagationpolicy.karmada.io~1permanent-id" {
+	if firstPatch.Operation != "replace" || firstPatch.Path != "/metadata/labels/clusterpropagationpolicy.karmada.io~1permanent-id" {
 		t.Errorf("Handle() returned unexpected patches. Only the UUID patch was expected. Received patches: %v", got.Patches)
 	}
 
