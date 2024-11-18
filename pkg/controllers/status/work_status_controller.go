@@ -55,7 +55,7 @@ import (
 	"github.com/karmada-io/karmada/pkg/util/restmapper"
 )
 
-// WorkStatusControllerName is the controller name that will be used when reporting events.
+// WorkStatusControllerName is the controller name that will be used when reporting events and metrics.
 const WorkStatusControllerName = "work-status-controller"
 
 // WorkStatusController is to sync status of Work.
@@ -170,7 +170,7 @@ func generateKey(obj interface{}) (util.QueueKey, error) {
 func getClusterNameFromAnnotation(resource *unstructured.Unstructured) (string, error) {
 	workNamespace, exist := resource.GetAnnotations()[workv1alpha2.WorkNamespaceAnnotation]
 	if !exist {
-		klog.V(4).Infof("Ignore resource(kind=%s, %s/%s) which is not managed by Karmada.", resource.GetKind(), resource.GetNamespace(), resource.GetName())
+		klog.V(5).Infof("Ignore resource(kind=%s, %s/%s) which is not managed by Karmada.", resource.GetKind(), resource.GetNamespace(), resource.GetName())
 		return "", nil
 	}
 
@@ -546,9 +546,10 @@ func (c *WorkStatusController) getSingleClusterManager(cluster *clusterv1alpha1.
 // SetupWithManager creates a controller and register to controller manager.
 func (c *WorkStatusController) SetupWithManager(mgr controllerruntime.Manager) error {
 	return controllerruntime.NewControllerManagedBy(mgr).
+		Named(WorkStatusControllerName).
 		For(&workv1alpha1.Work{}, builder.WithPredicates(c.PredicateFunc)).
 		WithOptions(controller.Options{
-			RateLimiter: ratelimiterflag.DefaultControllerRateLimiter(c.RateLimiterOptions),
+			RateLimiter: ratelimiterflag.DefaultControllerRateLimiter[controllerruntime.Request](c.RateLimiterOptions),
 		}).Complete(c)
 }
 

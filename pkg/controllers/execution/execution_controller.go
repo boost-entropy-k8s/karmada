@@ -40,7 +40,6 @@ import (
 
 	clusterv1alpha1 "github.com/karmada-io/karmada/pkg/apis/cluster/v1alpha1"
 	workv1alpha1 "github.com/karmada-io/karmada/pkg/apis/work/v1alpha1"
-	workv1alpha2 "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2"
 	"github.com/karmada-io/karmada/pkg/detector"
 	"github.com/karmada-io/karmada/pkg/events"
 	"github.com/karmada-io/karmada/pkg/metrics"
@@ -54,7 +53,7 @@ import (
 )
 
 const (
-	// ControllerName is the controller name that will be used when reporting events.
+	// ControllerName is the controller name that will be used when reporting events and metrics.
 	ControllerName = "execution-controller"
 	// WorkSuspendDispatchingConditionMessage is the condition and event message when dispatching is suspended.
 	WorkSuspendDispatchingConditionMessage = "Work dispatching is in a suspended state."
@@ -134,10 +133,11 @@ func (c *Controller) Reconcile(ctx context.Context, req controllerruntime.Reques
 // SetupWithManager creates a controller and register to controller manager.
 func (c *Controller) SetupWithManager(mgr controllerruntime.Manager) error {
 	return controllerruntime.NewControllerManagedBy(mgr).
+		Named(ControllerName).
 		For(&workv1alpha1.Work{}, builder.WithPredicates(c.PredicateFunc)).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		WithOptions(controller.Options{
-			RateLimiter: ratelimiterflag.DefaultControllerRateLimiter(c.RatelimiterOptions),
+			RateLimiter: ratelimiterflag.DefaultControllerRateLimiter[controllerruntime.Request](c.RatelimiterOptions),
 		}).
 		Complete(c)
 }
@@ -209,23 +209,8 @@ func (c *Controller) cleanupPolicyClaimMetadata(ctx context.Context, work *workv
 		} else {
 			detector.CleanupPPClaimMetadata(workload)
 		}
-		util.RemoveLabels(
-			workload,
-			workv1alpha2.ResourceBindingPermanentIDLabel,
-			workv1alpha2.WorkPermanentIDLabel,
-			util.ManagedByKarmadaLabel,
-		)
-		util.RemoveAnnotations(
-			workload,
-			workv1alpha2.ManagedAnnotation,
-			workv1alpha2.ManagedLabels,
-			workv1alpha2.ResourceBindingNamespaceAnnotationKey,
-			workv1alpha2.ResourceBindingNameAnnotationKey,
-			workv1alpha2.ResourceTemplateUIDAnnotation,
-			workv1alpha2.ResourceTemplateGenerationAnnotationKey,
-			workv1alpha2.WorkNameAnnotation,
-			workv1alpha2.WorkNamespaceAnnotation,
-		)
+		util.RemoveLabels(workload, util.ManagedResourceLabels...)
+		util.RemoveAnnotations(workload, util.ManagedResourceAnnotations...)
 
 		if err := c.ObjectWatcher.Update(ctx, cluster.Name, workload, clusterObj); err != nil {
 			klog.Errorf("Failed to update metadata in the given member cluster %v, err is %v", cluster.Name, err)

@@ -34,7 +34,7 @@ import (
 	"github.com/karmada-io/karmada/pkg/util/helper"
 )
 
-// ControllerName is the controller name that will be used when reporting events.
+// ControllerName is the controller name that will be used when reporting events and metrics.
 const ControllerName = "remedy-controller"
 
 // RemedyController is to sync Cluster resource, according to the cluster status
@@ -87,7 +87,7 @@ func (c *RemedyController) Reconcile(ctx context.Context, req controllerruntime.
 func (c *RemedyController) SetupWithManager(mgr controllerruntime.Manager) error {
 	remedyController, err := controller.New(ControllerName, mgr, controller.Options{
 		Reconciler:  c,
-		RateLimiter: ratelimiterflag.DefaultControllerRateLimiter(c.RateLimitOptions),
+		RateLimiter: ratelimiterflag.DefaultControllerRateLimiter[controllerruntime.Request](c.RateLimitOptions),
 	})
 	if err != nil {
 		return err
