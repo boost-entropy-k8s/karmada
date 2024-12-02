@@ -192,18 +192,20 @@ func buildTaskOptions(failoverBehavior *policyv1alpha1.ApplicationFailoverBehavi
 	taskOpts = append(taskOpts, workv1alpha2.WithReason(workv1alpha2.EvictionReasonApplicationFailure))
 	taskOpts = append(taskOpts, workv1alpha2.WithPurgeMode(failoverBehavior.PurgeMode))
 
-	if failoverBehavior.StatePreservation != nil && len(failoverBehavior.StatePreservation.Rules) != 0 {
-		targetStatusItem, exist := findTargetStatusItemByCluster(aggregatedStatus, cluster)
-		if !exist || targetStatusItem.Status == nil || targetStatusItem.Status.Raw == nil {
-			return nil, fmt.Errorf("the application status has not yet been collected from Cluster(%s)", cluster)
-		}
-		preservedLabelState, err := buildPreservedLabelState(failoverBehavior.StatePreservation, targetStatusItem.Status.Raw)
-		if err != nil {
-			return nil, err
-		}
-		if preservedLabelState != nil {
-			taskOpts = append(taskOpts, workv1alpha2.WithPreservedLabelState(preservedLabelState))
-			taskOpts = append(taskOpts, workv1alpha2.WithClustersBeforeFailover(clustersBeforeFailover))
+	if features.FeatureGate.Enabled(features.StatefulFailoverInjection) {
+		if failoverBehavior.StatePreservation != nil && len(failoverBehavior.StatePreservation.Rules) != 0 {
+			targetStatusItem, exist := findTargetStatusItemByCluster(aggregatedStatus, cluster)
+			if !exist || targetStatusItem.Status == nil || targetStatusItem.Status.Raw == nil {
+				return nil, fmt.Errorf("the application status has not yet been collected from Cluster(%s)", cluster)
+			}
+			preservedLabelState, err := buildPreservedLabelState(failoverBehavior.StatePreservation, targetStatusItem.Status.Raw)
+			if err != nil {
+				return nil, err
+			}
+			if preservedLabelState != nil {
+				taskOpts = append(taskOpts, workv1alpha2.WithPreservedLabelState(preservedLabelState))
+				taskOpts = append(taskOpts, workv1alpha2.WithClustersBeforeFailover(clustersBeforeFailover))
+			}
 		}
 	}
 
@@ -217,13 +219,7 @@ func buildTaskOptions(failoverBehavior *policyv1alpha1.ApplicationFailoverBehavi
 			return nil, err
 		}
 	case policyv1alpha1.Never:
-		if features.FeatureGate.Enabled(features.GracefulEviction) {
-			taskOpts = append(taskOpts, workv1alpha2.WithSuppressDeletion(ptr.To[bool](true)))
-		} else {
-			err := fmt.Errorf("GracefulEviction featureGate must be enabled when purgeMode is %s", policyv1alpha1.Never)
-			klog.Error(err)
-			return nil, err
-		}
+		taskOpts = append(taskOpts, workv1alpha2.WithSuppressDeletion(ptr.To[bool](true)))
 	}
 
 	return taskOpts, nil
