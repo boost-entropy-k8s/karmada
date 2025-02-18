@@ -128,6 +128,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.ReplicaSchedulingStrategy":                   schema_pkg_apis_policy_v1alpha1_ReplicaSchedulingStrategy(ref),
 		"github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.ResourceSelector":                            schema_pkg_apis_policy_v1alpha1_ResourceSelector(ref),
 		"github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.RuleWithCluster":                             schema_pkg_apis_policy_v1alpha1_RuleWithCluster(ref),
+		"github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.SchedulePriority":                            schema_pkg_apis_policy_v1alpha1_SchedulePriority(ref),
 		"github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.SpreadConstraint":                            schema_pkg_apis_policy_v1alpha1_SpreadConstraint(ref),
 		"github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.StatePreservation":                           schema_pkg_apis_policy_v1alpha1_StatePreservation(ref),
 		"github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.StatePreservationRule":                       schema_pkg_apis_policy_v1alpha1_StatePreservationRule(ref),
@@ -180,6 +181,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.ResourceBindingList":                           schema_pkg_apis_work_v1alpha2_ResourceBindingList(ref),
 		"github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.ResourceBindingSpec":                           schema_pkg_apis_work_v1alpha2_ResourceBindingSpec(ref),
 		"github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.ResourceBindingStatus":                         schema_pkg_apis_work_v1alpha2_ResourceBindingStatus(ref),
+		"github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.SchedulePriority":                              schema_pkg_apis_work_v1alpha2_SchedulePriority(ref),
 		"github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.Suspension":                                    schema_pkg_apis_work_v1alpha2_Suspension(ref),
 		"github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.TargetCluster":                                 schema_pkg_apis_work_v1alpha2_TargetCluster(ref),
 		"github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.TaskOptions":                                   schema_pkg_apis_work_v1alpha2_TaskOptions(ref),
@@ -5008,12 +5010,18 @@ func schema_pkg_apis_policy_v1alpha1_PropagationSpec(ref common.ReferenceCallbac
 							Format:      "",
 						},
 					},
+					"schedulePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SchedulePriority defines how Karmada should resolve the priority and preemption policy for workload scheduling.\n\nThis setting is useful for controlling the scheduling behavior of offline workloads. By setting a higher or lower priority, users can control which workloads are scheduled first. Additionally, it allows specifying a preemption policy where higher-priority workloads can preempt lower-priority ones in scenarios of resource contention.\n\nNote: This feature is currently in the alpha stage. The priority-based scheduling functionality is controlled by the PriorityBasedScheduling feature gate, and preemption is controlled by the PriorityBasedPreemptiveScheduling feature gate. Currently, only priority-based scheduling is supported. Preemption functionality is not yet available and will be introduced in future releases as the feature matures.",
+							Ref:         ref("github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.SchedulePriority"),
+						},
+					},
 				},
 				Required: []string{"resourceSelectors"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.FailoverBehavior", "github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.Placement", "github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.ResourceSelector", "github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.Suspension"},
+			"github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.FailoverBehavior", "github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.Placement", "github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.ResourceSelector", "github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.SchedulePriority", "github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.Suspension"},
 	}
 }
 
@@ -5130,6 +5138,34 @@ func schema_pkg_apis_policy_v1alpha1_RuleWithCluster(ref common.ReferenceCallbac
 		},
 		Dependencies: []string{
 			"github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.ClusterAffinity", "github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.Overriders"},
+	}
+}
+
+func schema_pkg_apis_policy_v1alpha1_SchedulePriority(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SchedulePriority defines how Karmada should resolve the priority and preemption policy for workload scheduling.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"priorityClassSource": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PriorityClassSource specifies where Karmada should look for the PriorityClass definition. Available options: - KubePriorityClass (default): Uses Kubernetes PriorityClass (scheduling.k8s.io/v1) - PodPriorityClass: Uses PriorityClassName from PodTemplate: PodSpec.PriorityClassName (not yet implemented) - FederatedPriorityClass: Uses Karmada FederatedPriorityClass (not yet implemented)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"priorityClassName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PriorityClassName specifies which PriorityClass to use. Its behavior depends on PriorityClassSource:\n\nBehavior of PriorityClassName:\n\nFor KubePriorityClass: - When specified: Uses the named Kubernetes PriorityClass. - When empty: Uses the cluster's default PriorityClass (i.e., the PriorityClass marked as the global default in the cluster). - If neither exists: Sets priority=0 and preemptionPolicy=Never.\n\nFor PodPriorityClass: - Uses PriorityClassName from the PodTemplate. - If the specified PriorityClass is not found, falls back to the cluster's default PriorityClass\n  (i.e., the PriorityClass marked as the global default in the cluster).\n- If no valid PriorityClass is found: Sets priority=0 and preemptionPolicy=Never. - Not yet implemented.\n\nFor FederatedPriorityClass: - Not yet implemented.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"priorityClassName"},
+			},
+		},
 	}
 }
 
@@ -7385,12 +7421,18 @@ func schema_pkg_apis_work_v1alpha2_ResourceBindingSpec(ref common.ReferenceCallb
 							Format:      "",
 						},
 					},
+					"schedulePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SchedulePriority represents the scheduling priority assigned to workloads.",
+							Ref:         ref("github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.SchedulePriority"),
+						},
+					},
 				},
 				Required: []string{"resource"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.FailoverBehavior", "github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.Placement", "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.BindingSnapshot", "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.GracefulEvictionTask", "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.ObjectReference", "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.ReplicaRequirements", "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.Suspension", "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.TargetCluster", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			"github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.FailoverBehavior", "github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1.Placement", "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.BindingSnapshot", "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.GracefulEvictionTask", "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.ObjectReference", "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.ReplicaRequirements", "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.SchedulePriority", "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.Suspension", "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.TargetCluster", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
 	}
 }
 
@@ -7454,6 +7496,26 @@ func schema_pkg_apis_work_v1alpha2_ResourceBindingStatus(ref common.ReferenceCal
 		},
 		Dependencies: []string{
 			"github.com/karmada-io/karmada/pkg/apis/work/v1alpha2.AggregatedStatusItem", "k8s.io/apimachinery/pkg/apis/meta/v1.Condition", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_pkg_apis_work_v1alpha2_SchedulePriority(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SchedulePriority represents the scheduling priority assigned to workloads.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Priority specifies the scheduling priority for the binding. Higher values indicate a higher priority. If not explicitly set, the default value is 0.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
