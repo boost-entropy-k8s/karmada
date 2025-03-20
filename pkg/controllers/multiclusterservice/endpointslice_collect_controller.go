@@ -38,12 +38,14 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	clusterv1alpha1 "github.com/karmada-io/karmada/pkg/apis/cluster/v1alpha1"
 	networkingv1alpha1 "github.com/karmada-io/karmada/pkg/apis/networking/v1alpha1"
 	workv1alpha1 "github.com/karmada-io/karmada/pkg/apis/work/v1alpha1"
 	"github.com/karmada-io/karmada/pkg/controllers/ctrlutil"
+	"github.com/karmada-io/karmada/pkg/sharedcli/ratelimiterflag"
 	"github.com/karmada-io/karmada/pkg/util"
 	"github.com/karmada-io/karmada/pkg/util/fedinformer"
 	"github.com/karmada-io/karmada/pkg/util/fedinformer/genericmanager"
@@ -68,6 +70,7 @@ type EndpointSliceCollectController struct {
 	worker        util.AsyncWorker // worker process resources periodic from rateLimitingQueue.
 
 	ClusterCacheSyncTimeout metav1.Duration
+	RateLimiterOptions      ratelimiterflag.Options
 }
 
 var (
@@ -120,7 +123,9 @@ func (c *EndpointSliceCollectController) Reconcile(ctx context.Context, req cont
 func (c *EndpointSliceCollectController) SetupWithManager(mgr controllerruntime.Manager) error {
 	return controllerruntime.NewControllerManagedBy(mgr).
 		Named(EndpointSliceCollectControllerName).
-		For(&workv1alpha1.Work{}, builder.WithPredicates(c.PredicateFunc)).Complete(c)
+		For(&workv1alpha1.Work{}, builder.WithPredicates(c.PredicateFunc)).
+		WithOptions(controller.Options{RateLimiter: ratelimiterflag.DefaultControllerRateLimiter[controllerruntime.Request](c.RateLimiterOptions)}).
+		Complete(c)
 }
 
 // RunWorkQueue initializes worker and run it, worker will process resource asynchronously.
@@ -386,7 +391,8 @@ func reportEndpointSlice(ctx context.Context, c client.Client, endpointSlice *un
 		return err
 	}
 
-	if err := ctrlutil.CreateOrUpdateWork(ctx, c, workMeta, endpointSlice); err != nil {
+	// indicate the Work should be not propagated since it's collected resource.
+	if err := ctrlutil.CreateOrUpdateWork(ctx, c, workMeta, endpointSlice, ctrlutil.WithSuspendDispatching(true)); err != nil {
 		klog.Errorf("Failed to create or update work(%s/%s), Error: %v", workMeta.Namespace, workMeta.Name, err)
 		return err
 	}
@@ -408,9 +414,7 @@ func getEndpointSliceWorkMeta(ctx context.Context, c client.Client, ns string, w
 	ls := map[string]string{
 		util.MultiClusterServiceNamespaceLabel: endpointSlice.GetNamespace(),
 		util.MultiClusterServiceNameLabel:      endpointSlice.GetLabels()[discoveryv1.LabelServiceName],
-		// indicate the Work should be not propagated since it's collected resource.
-		util.PropagationInstruction:          util.PropagationInstructionSuppressed,
-		util.EndpointSliceWorkManagedByLabel: util.MultiClusterServiceKind,
+		util.EndpointSliceWorkManagedByLabel:   util.MultiClusterServiceKind,
 	}
 	if existWork.Labels == nil || (err != nil && apierrors.IsNotFound(err)) {
 		workMeta := metav1.ObjectMeta{Name: workName, Namespace: ns, Labels: ls}

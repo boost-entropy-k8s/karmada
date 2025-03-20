@@ -19,6 +19,7 @@ package helper
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -33,6 +34,7 @@ import (
 	workv1alpha1 "github.com/karmada-io/karmada/pkg/apis/work/v1alpha1"
 	workv1alpha2 "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2"
 	"github.com/karmada-io/karmada/pkg/util"
+	"github.com/karmada-io/karmada/pkg/util/indexregistry"
 )
 
 // GetWorksByLabelsSet gets WorkList by matching labels.Set.
@@ -48,9 +50,9 @@ func GetWorksByLabelsSet(ctx context.Context, c client.Client, ls labels.Set) (*
 func GetWorksByBindingID(ctx context.Context, c client.Client, bindingID string, namespaced bool) (*workv1alpha1.WorkList, error) {
 	var key string
 	if namespaced {
-		key = workv1alpha2.ResourceBindingPermanentIDLabel
+		key = indexregistry.WorkIndexByResourceBindingID
 	} else {
-		key = workv1alpha2.ClusterResourceBindingPermanentIDLabel
+		key = indexregistry.WorkIndexByClusterResourceBindingID
 	}
 	workList := &workv1alpha1.WorkList{}
 	listOpt := &client.ListOptions{
@@ -121,4 +123,9 @@ func SetLabelsAndAnnotationsForWorkload(workload *unstructured.Unstructured, wor
 		}))
 	}
 	util.RecordManagedLabels(workload)
+}
+
+// GetWorkSuspendDispatching will get suspendDispatching field from work spec
+func GetWorkSuspendDispatching(spec *workv1alpha1.WorkSpec) []string {
+	return []string{strconv.FormatBool(ptr.Deref(spec.SuspendDispatching, false))}
 }

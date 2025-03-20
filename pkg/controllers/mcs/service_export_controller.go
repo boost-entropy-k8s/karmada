@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -42,12 +43,14 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	mcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	clusterv1alpha1 "github.com/karmada-io/karmada/pkg/apis/cluster/v1alpha1"
 	workv1alpha1 "github.com/karmada-io/karmada/pkg/apis/work/v1alpha1"
 	"github.com/karmada-io/karmada/pkg/controllers/ctrlutil"
+	"github.com/karmada-io/karmada/pkg/sharedcli/ratelimiterflag"
 	"github.com/karmada-io/karmada/pkg/util"
 	"github.com/karmada-io/karmada/pkg/util/fedinformer"
 	"github.com/karmada-io/karmada/pkg/util/fedinformer/genericmanager"
@@ -76,7 +79,8 @@ type ServiceExportController struct {
 	// "member1": instance of ResourceEventHandler
 	eventHandlers sync.Map
 	// worker process resources periodic from rateLimitingQueue.
-	worker util.AsyncWorker
+	worker             util.AsyncWorker
+	RateLimiterOptions ratelimiterflag.Options
 }
 
 var (
@@ -132,7 +136,11 @@ func (c *ServiceExportController) Reconcile(ctx context.Context, req controllerr
 
 // SetupWithManager creates a controller and register to controller manager.
 func (c *ServiceExportController) SetupWithManager(mgr controllerruntime.Manager) error {
-	return controllerruntime.NewControllerManagedBy(mgr).Named(ServiceExportControllerName).For(&workv1alpha1.Work{}, builder.WithPredicates(c.PredicateFunc)).Complete(c)
+	return controllerruntime.NewControllerManagedBy(mgr).Named(ServiceExportControllerName).For(&workv1alpha1.Work{}, builder.WithPredicates(c.PredicateFunc)).
+		WithOptions(controller.Options{
+			RateLimiter: ratelimiterflag.DefaultControllerRateLimiter[controllerruntime.Request](c.RateLimiterOptions),
+		}).
+		Complete(c)
 }
 
 // RunWorkQueue initializes worker and run it, worker will process resource asynchronously.
@@ -151,7 +159,9 @@ func (c *ServiceExportController) RunWorkQueue() {
 func (c *ServiceExportController) enqueueReportedEpsServiceExport() {
 	workList := &workv1alpha1.WorkList{}
 	err := wait.PollUntilContextCancel(context.TODO(), 1*time.Second, true, func(ctx context.Context) (done bool, err error) {
-		err = c.List(ctx, workList, client.MatchingLabels{util.PropagationInstruction: util.PropagationInstructionSuppressed})
+		err = c.List(ctx, workList, client.MatchingFields{
+			workSuspendDispatchingIndex: "true",
+		})
 		if err != nil {
 			klog.Errorf("Failed to list collected EndpointSlices Work from member clusters: %v", err)
 			return false, nil
@@ -428,10 +438,10 @@ func (c *ServiceExportController) removeOrphanWork(ctx context.Context, endpoint
 	if err := c.List(ctx, collectedEpsWorkList, &client.ListOptions{
 		Namespace: names.GenerateExecutionSpaceName(serviceExportKey.Cluster),
 		LabelSelector: labels.SelectorFromSet(labels.Set{
-			util.PropagationInstruction: util.PropagationInstructionSuppressed,
-			util.ServiceNamespaceLabel:  serviceExportKey.Namespace,
-			util.ServiceNameLabel:       serviceExportKey.Name,
+			util.ServiceNamespaceLabel: serviceExportKey.Namespace,
+			util.ServiceNameLabel:      serviceExportKey.Name,
 		}),
+		FieldSelector: fields.OneTermEqualSelector(workSuspendDispatchingIndex, "true"),
 	}); err != nil {
 		klog.Errorf("Failed to list endpointslice work with serviceExport(%s/%s) under namespace %s: %v",
 			serviceExportKey.Namespace, serviceExportKey.Name, names.GenerateExecutionSpaceName(serviceExportKey.Cluster), err)
@@ -495,7 +505,8 @@ func reportEndpointSlice(ctx context.Context, c client.Client, endpointSlice *un
 		return err
 	}
 
-	if err := ctrlutil.CreateOrUpdateWork(ctx, c, workMeta, endpointSlice); err != nil {
+	// indicate the Work should be not propagated since it's collected resource.
+	if err := ctrlutil.CreateOrUpdateWork(ctx, c, workMeta, endpointSlice, ctrlutil.WithSuspendDispatching(true)); err != nil {
 		return err
 	}
 
@@ -518,10 +529,8 @@ func getEndpointSliceWorkMeta(ctx context.Context, c client.Client, ns string, w
 		Namespace:  ns,
 		Finalizers: []string{util.EndpointSliceControllerFinalizer},
 		Labels: map[string]string{
-			util.ServiceNamespaceLabel: endpointSlice.GetNamespace(),
-			util.ServiceNameLabel:      endpointSlice.GetLabels()[discoveryv1.LabelServiceName],
-			// indicate the Work should be not propagated since it's collected resource.
-			util.PropagationInstruction:          util.PropagationInstructionSuppressed,
+			util.ServiceNamespaceLabel:           endpointSlice.GetNamespace(),
+			util.ServiceNameLabel:                endpointSlice.GetLabels()[discoveryv1.LabelServiceName],
 			util.EndpointSliceWorkManagedByLabel: util.ServiceExportKind,
 		},
 	}

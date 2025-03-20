@@ -339,7 +339,7 @@ func startExecutionController(ctx controllerscontext.Context) (bool, error) {
 		ObjectWatcher:      ctx.ObjectWatcher,
 		PredicateFunc:      helper.NewExecutionPredicateOnAgent(),
 		InformerManager:    genericmanager.GetInstance(),
-		RatelimiterOptions: ctx.Opts.RateLimiterOptions,
+		RateLimiterOptions: ctx.Opts.RateLimiterOptions,
 	}
 	if err := executionController.SetupWithManager(ctx.Mgr); err != nil {
 		return false, err
@@ -380,6 +380,10 @@ func startServiceExportController(ctx controllerscontext.Context) (bool, error) 
 		PredicateFunc:               helper.NewPredicateForServiceExportControllerOnAgent(ctx.Opts.ClusterName),
 		ClusterDynamicClientSetFunc: util.NewClusterDynamicClientSetForAgent,
 		ClusterCacheSyncTimeout:     ctx.Opts.ClusterCacheSyncTimeout,
+		RateLimiterOptions:          ctx.Opts.RateLimiterOptions,
+	}
+	if err := mcs.IndexField(ctx.Mgr); err != nil {
+		return false, err
 	}
 	serviceExportController.RunWorkQueue()
 	if err := serviceExportController.SetupWithManager(ctx.Mgr); err != nil {
@@ -402,6 +406,7 @@ func startEndpointSliceCollectController(ctx controllerscontext.Context) (enable
 		PredicateFunc:               helper.NewPredicateForEndpointSliceCollectControllerOnAgent(opts.ClusterName),
 		ClusterDynamicClientSetFunc: util.NewClusterDynamicClientSet,
 		ClusterCacheSyncTimeout:     opts.ClusterCacheSyncTimeout,
+		RateLimiterOptions:          ctx.Opts.RateLimiterOptions,
 	}
 	endpointSliceCollectController.RunWorkQueue()
 	if err := endpointSliceCollectController.SetupWithManager(ctx.Mgr); err != nil {
